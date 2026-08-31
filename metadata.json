@@ -1,0 +1,6 @@
+{
+  "name": "Karne - YKS 2026 Çalışma Takip Platformu",
+  "description": "YKS 2026 hazırlık sürecinde öğrenciler, koçlar ve admin yönetimi için manuel haftalık program hazırlama, çalışma logu, deneme analizi ve soru bankası platformu v2.0.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
