@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
@@ -13,18 +14,20 @@ import { Signup } from './pages/Signup';
 import { StudentDashboard } from './pages/StudentDashboard';
 import { CoachDashboard } from './pages/CoachDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { AdminStorageQuota } from './pages/AdminStorageQuota';
 import { WrongQuestions } from './pages/WrongQuestions';
 import { StudyLog } from './pages/StudyLog';
 import { Exams } from './pages/Exams';
 import { ProgramAdvisor } from './pages/ProgramAdvisor';
 import { StudentsManagement } from './pages/StudentsManagement';
-import { CoachNotes } from './pages/CoachNotes';
 import { BooksManagement } from './pages/BooksManagement';
 import { FocusRoom } from './pages/FocusRoom';
 import { Settings } from './pages/Settings';
 import { UserProfileView } from './pages/UserProfile';
 import { CoachingHub } from './pages/CoachingHub';
 import { AiAnalyticsView } from './pages/AiAnalyticsView';
+import { StudiiLogo } from './components/StudiiLogo';
+import { SystemAnnouncementBanner } from './components/common/SystemAnnouncementBanner';
 
 const MainRouter: React.FC = () => {
   const { user, currentPath, loading } = useAuth();
@@ -32,11 +35,9 @@ const MainRouter: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F5F5F7] flex flex-col items-center justify-center p-4">
-        <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-md border border-black/[0.08] mb-3 animate-pulse">
-          <img src="/logo.jpg" alt="Karne" className="w-full h-full object-cover" />
-        </div>
-        <p className="mt-2 text-xs font-semibold text-[#86868B] tracking-wide">
-          Karne YKS v2.0
+        <StudiiLogo size="lg" showBadge={true} badgeText="YKS 2026" />
+        <p className="mt-3 text-xs font-semibold text-[#86868B] tracking-wide animate-pulse">
+          Yükleniyor...
         </p>
       </div>
     );
@@ -57,15 +58,19 @@ const MainRouter: React.FC = () => {
       <Sidebar />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto h-screen">
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto h-screen touch-scroll">
         <Header />
-        <main className="flex-1 pb-24 md:pb-12 px-3.5 sm:px-6 md:px-8 pt-4 sm:pt-6 max-w-7xl w-full mx-auto">
+        <SystemAnnouncementBanner />
+        <main className="flex-1 pb-28 sm:pb-24 md:pb-12 px-3 sm:px-6 md:px-8 pt-3.5 sm:pt-6 max-w-7xl w-full mx-auto apple-animate-in">
           {(() => {
             // Admin routing
             if (user.role === 'admin') {
               switch (currentPath) {
                 case '/settings':
                   return <Settings />;
+                case '/admin/storage':
+                case '/storage':
+                  return <AdminStorageQuota />;
                 case '/admin':
                 case '/dashboard':
                 default:
@@ -97,7 +102,6 @@ const MainRouter: React.FC = () => {
               case '/students':
                 return <StudentsManagement />;
               case '/coach-notes':
-                return <CoachNotes />;
               case '/coaching':
               case '/messages':
               case '/appointments':
@@ -127,8 +131,10 @@ const MainRouter: React.FC = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <MainRouter />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <MainRouter />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

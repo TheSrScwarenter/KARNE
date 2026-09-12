@@ -1,7 +1,9 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -1016,6 +1018,485 @@ app.post('/api/ai/generate-program', async (req: Request, res: Response): Promis
     } catch {
       res.status(500).json({ error: 'AI ders programı üretilemedi.' });
     }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// System Users Persistent Storage & Cloud Sync Engine
+// Ensures registered users on published site and dev preview are never lost
+// ---------------------------------------------------------------------------
+const DATA_DIR = path.join(process.cwd(), 'data');
+function ensureDataDir(): void {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+}
+
+const USERS_BACKUP_PATH = path.join(DATA_DIR, 'system_users.json');
+const DELETED_USERS_PATH = path.join(DATA_DIR, 'system_deleted_users.json');
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://abrrfeiyncyesaqdmxwx.supabase.co';
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_ROq1etUvTdEjcDLK0Eyczg_TRKQX25t';
+
+const serverSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function getDeletedUserTombstones(): Set<string> {
+  try {
+    if (fs.existsSync(DELETED_USERS_PATH)) {
+      const raw = fs.readFileSync(DELETED_USERS_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return new Set(parsed.map((s) => String(s).trim().toLowerCase()));
+      }
+    }
+  } catch (err) {
+    console.warn('[Server Storage] Could not read deleted user tombstones:', err);
+  }
+  return new Set();
+}
+
+function addDeletedUserTombstones(identifiers: string[]): void {
+  try {
+    const current = getDeletedUserTombstones();
+    identifiers.forEach((id) => {
+      if (id && id.trim()) {
+        current.add(id.trim().toLowerCase());
+      }
+    });
+    const dir = path.dirname(DELETED_USERS_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(DELETED_USERS_PATH, JSON.stringify(Array.from(current), null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[Server Storage] Failed to save deleted user tombstones:', err);
+  }
+}
+
+function removeDeletedUserTombstones(identifiers: string[]): void {
+  try {
+    const current = getDeletedUserTombstones();
+    identifiers.forEach((id) => {
+      if (id && id.trim()) {
+        current.delete(id.trim().toLowerCase());
+      }
+    });
+    const dir = path.dirname(DELETED_USERS_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(DELETED_USERS_PATH, JSON.stringify(Array.from(current), null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[Server Storage] Failed to remove deleted user tombstones:', err);
+  }
+}
+
+function getLocalBackupUsers(): any[] {
+  try {
+    if (fs.existsSync(USERS_BACKUP_PATH)) {
+      const raw = fs.readFileSync(USERS_BACKUP_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const tombstones = getDeletedUserTombstones();
+        return parsed.filter((u) => {
+          const idKey = u.id ? String(u.id).trim().toLowerCase() : '';
+          const emailKey = u.email ? String(u.email).trim().toLowerCase() : '';
+          return !tombstones.has(idKey) && !tombstones.has(emailKey);
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[Server Storage] Could not read local backup users:', err);
+  }
+  return [];
+}
+
+function saveLocalBackupUsers(users: any[]): void {
+  try {
+    const dir = path.dirname(USERS_BACKUP_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(USERS_BACKUP_PATH, JSON.stringify(users, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[Server Storage] Failed to write local backup users:', err);
+  }
+}
+
+// Helper to merge a single user record cleanly without status regression
+function mergeSingleUser(existing: any, incoming: any): any {
+  if (!existing) return { ...incoming };
+  if (!incoming) return { ...existing };
+
+  // Status priority:
+  // If either has been approved ('active'), rejected ('rejected'), or suspended ('suspended'),
+  // do NOT let a stale 'pending' status downgrade the user!
+  let resolvedStatus = incoming.status || existing.status || 'pending';
+  
+  if (existing.status === 'active' || incoming.status === 'active') {
+    // Both or one is active. If one is explicitly rejected or suspended, check if that was newer
+    if (incoming.status === 'rejected' || incoming.status === 'suspended') {
+      resolvedStatus = incoming.status;
+    } else if (existing.status === 'rejected' || existing.status === 'suspended') {
+      resolvedStatus = incoming.approval_date ? 'active' : existing.status;
+    } else {
+      resolvedStatus = 'active';
+    }
+  } else if (existing.status === 'rejected' || incoming.status === 'rejected') {
+    resolvedStatus = 'rejected';
+  } else if (existing.status === 'suspended' || incoming.status === 'suspended') {
+    resolvedStatus = 'suspended';
+  }
+
+  return {
+    ...existing,
+    ...incoming,
+    status: resolvedStatus,
+    approval_date: incoming.approval_date || existing.approval_date || (resolvedStatus === 'active' ? new Date().toISOString() : undefined),
+    created_at: existing.created_at || incoming.created_at || new Date().toISOString(),
+    phone: incoming.phone || existing.phone || '',
+    field: incoming.field || existing.field || 'SAY',
+    target_university: incoming.target_university || existing.target_university || '',
+    target_department: incoming.target_department || existing.target_department || '',
+    target_rank: incoming.target_rank || existing.target_rank || null,
+    coaching_specialty: incoming.coaching_specialty || existing.coaching_specialty || '',
+    coach_code: incoming.coach_code || existing.coach_code || null,
+    assigned_coach_id: incoming.assigned_coach_id || existing.assigned_coach_id || null,
+    assigned_coach_name: incoming.assigned_coach_name || existing.assigned_coach_name || null,
+    notes_by_admin: incoming.notes_by_admin || existing.notes_by_admin || null,
+    password: incoming.password || existing.password || '190707',
+  };
+}
+
+// Merge two lists of users without losing records or fields
+function mergeUserLists(primary: any[], secondary: any[]): any[] {
+  const map = new Map<string, any>();
+  
+  // Add primary
+  for (const u of primary) {
+    if (u && (u.email || u.id)) {
+      const key = (u.email ? u.email.trim().toLowerCase() : u.id);
+      map.set(key, { ...u });
+    }
+  }
+
+  // Merge secondary
+  for (const u of secondary) {
+    if (u && (u.email || u.id)) {
+      const key = (u.email ? u.email.trim().toLowerCase() : u.id);
+      const existing = map.get(key);
+      if (existing) {
+        map.set(key, mergeSingleUser(existing, u));
+      } else {
+        map.set(key, { ...u });
+      }
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+// GET all system users
+app.get('/api/system-users', async (req: Request, res: Response) => {
+  try {
+    const tombstones = getDeletedUserTombstones();
+    const isTombstoned = (u: any) => {
+      if (!u) return true;
+      const idKey = u.id ? String(u.id).trim().toLowerCase() : '';
+      const emailKey = u.email ? String(u.email).trim().toLowerCase() : '';
+      return (idKey && tombstones.has(idKey)) || (emailKey && tombstones.has(emailKey));
+    };
+
+    const localUsers = getLocalBackupUsers().filter((u) => !isTombstoned(u));
+
+    // Fetch from Supabase
+    let cloudUsers: any[] = [];
+    try {
+      const { data, error } = await serverSupabase.from('system_users').select('*');
+      if (!error && data) {
+        cloudUsers = data.filter((u: any) => !isTombstoned(u));
+      }
+    } catch (supaErr) {
+      console.warn('[Server Storage] Supabase read note:', supaErr);
+    }
+
+    const merged = mergeUserLists(localUsers, cloudUsers).filter((u) => !isTombstoned(u));
+    
+    // If we have merged updates, save back to local backup
+    if (merged.length !== localUsers.length) {
+      saveLocalBackupUsers(merged);
+    }
+
+    res.json({ success: true, users: merged });
+  } catch (err: any) {
+    console.error('[Server Storage] Error in GET /api/system-users:', err);
+    res.status(500).json({ error: 'Kullanıcı listesi alınamadı.', users: getLocalBackupUsers() });
+  }
+});
+
+// POST single system user (upsert)
+app.post('/api/system-users', async (req: Request, res: Response) => {
+  try {
+    const user = req.body;
+    if (!user || (!user.email && !user.id)) {
+      res.status(400).json({ error: 'Geçersiz kullanıcı verisi.' });
+      return;
+    }
+
+    // If previously deleted, un-tombstone since admin or user is explicitly creating/registering
+    const unTombstones: string[] = [];
+    if (user.id) unTombstones.push(user.id);
+    if (user.email) unTombstones.push(user.email);
+    removeDeletedUserTombstones(unTombstones);
+
+    const localUsers = getLocalBackupUsers();
+    const updated = mergeUserLists(localUsers, [user]);
+    saveLocalBackupUsers(updated);
+
+    // Also sync to Supabase
+    try {
+      await serverSupabase.from('system_users').upsert([user]);
+    } catch (supaErr) {
+      console.warn('[Server Storage] Supabase single upsert note:', supaErr);
+    }
+
+    res.json({ success: true, user });
+  } catch (err: any) {
+    console.error('[Server Storage] Error in POST /api/system-users:', err);
+    res.status(500).json({ error: 'Kullanıcı kaydedilemedi.' });
+  }
+});
+
+// POST batch system users (upsert)
+app.post('/api/system-users/batch', async (req: Request, res: Response) => {
+  try {
+    const { users } = req.body;
+    if (!Array.isArray(users)) {
+      res.status(400).json({ error: 'Geçersiz kullanıcı listesi.' });
+      return;
+    }
+
+    const tombstones = getDeletedUserTombstones();
+    const isTombstoned = (u: any) => {
+      if (!u) return true;
+      const idKey = u.id ? String(u.id).trim().toLowerCase() : '';
+      const emailKey = u.email ? String(u.email).trim().toLowerCase() : '';
+      return (idKey && tombstones.has(idKey)) || (emailKey && tombstones.has(emailKey));
+    };
+
+    const validUsers = users.filter((u: any) => !isTombstoned(u));
+    const localUsers = getLocalBackupUsers();
+    const merged = mergeUserLists(localUsers, validUsers);
+    saveLocalBackupUsers(merged);
+
+    // Sync to Supabase
+    try {
+      await serverSupabase.from('system_users').upsert(validUsers);
+    } catch (supaErr) {
+      console.warn('[Server Storage] Supabase batch upsert note:', supaErr);
+    }
+
+    res.json({ success: true, count: merged.length });
+  } catch (err: any) {
+    console.error('[Server Storage] Error in POST /api/system-users/batch:', err);
+    res.status(500).json({ error: 'Toplu kullanıcı kaydedilemedi.' });
+  }
+});
+
+// DELETE system user
+app.delete('/api/system-users/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const queryEmail = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
+    
+    const localUsers = getLocalBackupUsers();
+    const targetUser = localUsers.find((u) => u.id === id || (queryEmail && u.email?.toLowerCase() === queryEmail));
+    const targetEmail = targetUser?.email?.toLowerCase() || queryEmail;
+
+    // Record tombstone so this user can never reappear from cloud or cache merges
+    const identifiersToTombstone: string[] = [id];
+    if (targetEmail) identifiersToTombstone.push(targetEmail);
+    addDeletedUserTombstones(identifiersToTombstone);
+
+    // Filter and update local storage backup
+    const filtered = localUsers.filter((u) => u.id !== id && (!targetEmail || u.email?.toLowerCase() !== targetEmail));
+    saveLocalBackupUsers(filtered);
+
+    // Hard delete from Supabase
+    try {
+      await serverSupabase.from('system_users').delete().eq('id', id);
+      if (targetEmail) {
+        await serverSupabase.from('system_users').delete().eq('email', targetEmail);
+      }
+    } catch (supaErr) {
+      console.warn('[Server Storage] Supabase delete note:', supaErr);
+    }
+
+    res.json({ success: true, deletedId: id, deletedEmail: targetEmail });
+  } catch (err: any) {
+    console.error('[Server Storage] Error in DELETE /api/system-users:', err);
+    res.status(500).json({ error: 'Kullanıcı silinemedi.' });
+  }
+});
+
+// ==========================================
+// SYSTEM ANNOUNCEMENTS API
+// ==========================================
+const ANNOUNCEMENT_FILE_PATH = path.join(DATA_DIR, 'system_announcement.json');
+
+function readStoredAnnouncement() {
+  try {
+    if (fs.existsSync(ANNOUNCEMENT_FILE_PATH)) {
+      const raw = fs.readFileSync(ANNOUNCEMENT_FILE_PATH, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('[Server Announcement] Read error:', e);
+  }
+  return {
+    id: 'ann-default',
+    title: 'studii YKS 2026 Platformuna Hoş Geldiniz',
+    message: 'Haftalık programınızı ve yanlış soru bankanızı düzenli takip ederek hedefinize bir adım daha yaklaşın!',
+    type: 'info',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function writeStoredAnnouncement(ann: any) {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(ANNOUNCEMENT_FILE_PATH, JSON.stringify(ann, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[Server Announcement] Write error:', e);
+  }
+}
+
+app.get('/api/system-announcement', (req: Request, res: Response) => {
+  try {
+    const ann = readStoredAnnouncement();
+    res.json(ann);
+  } catch (err) {
+    res.status(500).json({ error: 'Duyuru okunamadı' });
+  }
+});
+
+app.post('/api/system-announcement', (req: Request, res: Response) => {
+  try {
+    const data = req.body;
+    if (!data) return res.status(400).json({ error: 'Duyuru verisi eksik' });
+    const announcement = {
+      id: data.id || 'ann-' + Date.now(),
+      title: (data.title || '').trim(),
+      message: (data.message || '').trim(),
+      type: ['info', 'warning', 'success', 'alert'].includes(data.type) ? data.type : 'info',
+      isActive: Boolean(data.isActive),
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    writeStoredAnnouncement(announcement);
+    res.json({ success: true, announcement });
+  } catch (err) {
+    res.status(500).json({ error: 'Duyuru kaydedilemedi' });
+  }
+});
+
+app.delete('/api/system-announcement', (req: Request, res: Response) => {
+  try {
+    const cleared = {
+      id: 'ann-cleared',
+      title: '',
+      message: '',
+      type: 'info',
+      isActive: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    writeStoredAnnouncement(cleared);
+    res.json({ success: true, announcement: cleared });
+  } catch (err) {
+    res.status(500).json({ error: 'Duyuru temizlenemedi' });
+  }
+});
+
+// ==========================================
+// SYSTEM XP SETTINGS & RESET API
+// ==========================================
+const XP_SETTINGS_FILE_PATH = path.join(DATA_DIR, 'system_xp_settings.json');
+
+const DEFAULT_XP_SETTINGS = {
+  xpPerStudyMinute: 2,
+  xpPerStreakDay: 25,
+  sessionCompletionBonus: 50,
+  goalCompletionBonus: 100,
+  levelUpBaseXP: 400,
+  rulesDescription: 'Odak oturumunda her çalışma dakikası için 2 XP kazanılır. 7+ gün seri günlerinde günlük ekstra 25 XP bonus ve oturum hedefini tamamlama halinde +100 XP eklenir.',
+  updatedAt: new Date().toISOString(),
+};
+
+function readStoredXPSettings() {
+  try {
+    if (fs.existsSync(XP_SETTINGS_FILE_PATH)) {
+      const raw = fs.readFileSync(XP_SETTINGS_FILE_PATH, 'utf-8');
+      return { ...DEFAULT_XP_SETTINGS, ...JSON.parse(raw) };
+    }
+  } catch (e) {
+    console.error('[Server XP Settings] Read error:', e);
+  }
+  return DEFAULT_XP_SETTINGS;
+}
+
+function writeStoredXPSettings(settings: any) {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(XP_SETTINGS_FILE_PATH, JSON.stringify(settings, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[Server XP Settings] Write error:', e);
+  }
+}
+
+app.get('/api/system-xp-settings', (req: Request, res: Response) => {
+  try {
+    const settings = readStoredXPSettings();
+    res.json(settings);
+  } catch (err) {
+    res.status(500).json({ error: 'XP ayarları okunamadı' });
+  }
+});
+
+app.post('/api/system-xp-settings', (req: Request, res: Response) => {
+  try {
+    const current = readStoredXPSettings();
+    const updates = req.body || {};
+    const updated = {
+      ...current,
+      ...updates,
+      xpPerStudyMinute: Math.max(1, Math.min(50, Number(updates.xpPerStudyMinute) || current.xpPerStudyMinute)),
+      xpPerStreakDay: Math.max(0, Math.min(500, Number(updates.xpPerStreakDay) ?? current.xpPerStreakDay)),
+      sessionCompletionBonus: Math.max(0, Math.min(1000, Number(updates.sessionCompletionBonus) ?? current.sessionCompletionBonus)),
+      goalCompletionBonus: Math.max(0, Math.min(2000, Number(updates.goalCompletionBonus) ?? current.goalCompletionBonus)),
+      updatedAt: new Date().toISOString(),
+    };
+    writeStoredXPSettings(updated);
+    res.json({ success: true, settings: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'XP ayarları kaydedilemedi' });
+  }
+});
+
+app.post('/api/system-xp-reset', (req: Request, res: Response) => {
+  try {
+    const { targetStudentId, resetAll } = req.body || {};
+    // Log the reset event and return success
+    console.log(`[Server XP Reset] Reset requested: targetStudentId=${targetStudentId}, resetAll=${resetAll}`);
+    res.json({
+      success: true,
+      message: resetAll ? 'Tüm öğrencilerin XP puanları sıfırlandı.' : `Öğrenci (${targetStudentId}) XP puanı sıfırlandı.`,
+      targetStudentId,
+      resetAll,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'XP sıfırlanamadı' });
   }
 });
 

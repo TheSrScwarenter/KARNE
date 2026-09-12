@@ -15,6 +15,7 @@ import {
   Cloud,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { StudiiLogo } from './StudiiLogo';
 
 interface SplashAndWelcomeProps {
   onComplete: () => void;
@@ -71,35 +72,11 @@ export const SplashAndWelcome: React.FC<SplashAndWelcomeProps> = ({ onComplete }
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="flex flex-col items-center justify-center text-center p-6 max-w-sm w-full relative z-10"
           >
-            {/* Animated Brand Emblem */}
-            <div className="relative mb-6">
-              <motion.div
-                animate={{
-                  rotate: [0, 360],
-                }}
-                transition={{
-                  repeat: Infinity,
-                  duration: 8,
-                  ease: 'linear',
-                }}
-                className="w-20 h-20 rounded-3xl border-2 border-[#D97736]/60 border-dashed absolute -inset-1"
-              />
-              <div className="w-18 h-18 rounded-2xl overflow-hidden shadow-2xl relative border-2 border-white/20">
-                <img
-                  src="/logo.jpg"
-                  alt="Karne Logo"
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
+            {/* Animated Brand Emblem & Typographic Studii Logo */}
+            <div className="mb-6 flex flex-col items-center">
+              <StudiiLogo size="xl" theme="light" showBadge={true} badgeText="YKS 2026" />
             </div>
 
-            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2 justify-center">
-              <span>Karne</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-[#D97736] text-white font-mono font-bold">
-                YKS 2026
-              </span>
-            </h1>
             <p className="text-xs text-[#9BB1D0] mt-1.5 font-medium">
               Yeni Nesil YKS Çalışma & Koçluk Ekosistemi
             </p>

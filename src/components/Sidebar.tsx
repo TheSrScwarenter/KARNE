@@ -23,7 +23,10 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  HardDrive,
 } from 'lucide-react';
+import { SystemHealthIndicator } from './SystemHealthIndicator';
+import { StudiiLogo } from './StudiiLogo';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -44,33 +47,32 @@ export const Sidebar: React.FC = () => {
   const isAdmin = user.role === 'admin';
 
   const studentNavItems = [
-    { id: 'nav-student-dashboard', label: 'Genel Bakış', path: '/dashboard', icon: LayoutDashboard, color: 'bg-blue-500 text-white' },
-    { id: 'nav-student-profile', label: 'Profil & Başarı Rozetleri 🏆', path: '/profile', icon: Trophy, color: 'bg-amber-500 text-white' },
-    { id: 'nav-student-ai-analytics', label: 'YKS Sıralama & AI Radarı ✨', path: '/ai-analytics', icon: Sparkles, color: 'bg-purple-500 text-white' },
-    { id: 'nav-student-coaching', label: 'Koçluk & Soru Mesajları 💬', path: '/coaching', icon: MessageSquare, color: 'bg-indigo-500 text-white' },
-    { id: 'nav-student-focus', label: 'Odak Kronometresi 🔥', path: '/focus', icon: Flame, color: 'bg-orange-500 text-white' },
-    { id: 'nav-student-books', label: 'Kitap & Kaynaklarım', path: '/books', icon: BookOpen, color: 'bg-emerald-500 text-white' },
-    { id: 'nav-student-wrong-questions', label: 'Yanlış Soru Bankası', path: '/wrong-questions', icon: HelpCircle, color: 'bg-rose-500 text-white' },
-    { id: 'nav-student-study-log', label: 'Çalışma Günlüğü & Analiz', path: '/study-log', icon: Clock, color: 'bg-cyan-500 text-white' },
-    { id: 'nav-student-exams', label: 'Deneme Analizleri', path: '/exams', icon: BarChart3, color: 'bg-teal-500 text-white' },
-    { id: 'nav-student-program', label: 'Haftalık Program', path: '/program', icon: CalendarDays, color: 'bg-sky-500 text-white' },
-    { id: 'nav-student-notes', label: 'Koçumdan Notlar 📝', path: '/coach-notes', icon: FileText, color: 'bg-blue-600 text-white' },
-    { id: 'nav-student-settings', label: 'Hesap & Ayarlar', path: '/settings', icon: Settings, color: 'bg-gray-500 text-white' },
+    { id: 'nav-student-dashboard', label: 'Genel Bakış', path: '/dashboard', icon: LayoutDashboard },
+    { id: 'nav-student-profile', label: 'Profil & Başarı Rozetleri', path: '/profile', icon: Trophy },
+    { id: 'nav-student-ai-analytics', label: 'YKS Sıralama & AI Radarı', path: '/ai-analytics', icon: Sparkles },
+    { id: 'nav-student-coaching', label: 'Koçluk & Soru Mesajları', path: '/coaching', icon: MessageSquare },
+    { id: 'nav-student-focus', label: 'Odak Kronometresi', path: '/focus', icon: Flame },
+    { id: 'nav-student-books', label: 'Kitap & Kaynaklarım', path: '/books', icon: BookOpen },
+    { id: 'nav-student-wrong-questions', label: 'Yanlış Soru Bankası', path: '/wrong-questions', icon: HelpCircle },
+    { id: 'nav-student-study-log', label: 'Çalışma Günlüğü & Analiz', path: '/study-log', icon: Clock },
+    { id: 'nav-student-exams', label: 'Deneme Analizleri', path: '/exams', icon: BarChart3 },
+    { id: 'nav-student-program', label: 'Haftalık Program', path: '/program', icon: CalendarDays },
+    { id: 'nav-student-settings', label: 'Hesap & Ayarlar', path: '/settings', icon: Settings },
   ];
 
   const coachNavItems = [
-    { id: 'nav-coach-dashboard', label: 'Koç Kontrol Paneli', path: '/dashboard', icon: LayoutDashboard, color: 'bg-blue-500 text-white' },
-    { id: 'nav-coach-coaching', label: 'Öğrenci İletişim & Randevular 💬', path: '/coaching', icon: MessageSquare, color: 'bg-indigo-500 text-white' },
-    { id: 'nav-coach-ai-analytics', label: 'YKS AI Analiz Motoru ✨', path: '/ai-analytics', icon: Sparkles, color: 'bg-purple-500 text-white' },
-    { id: 'nav-coach-students', label: 'Kayıtlı Öğrencilerim', path: '/students', icon: Users, color: 'bg-emerald-500 text-white' },
-    { id: 'nav-coach-program', label: 'Haftalık Program Hazırlayıcı', path: '/program-advisor', icon: CalendarDays, color: 'bg-sky-500 text-white' },
-    { id: 'nav-coach-notes', label: 'Koç Notları & Değerlendirme', path: '/coach-notes', icon: FileText, color: 'bg-blue-600 text-white' },
-    { id: 'nav-coach-settings', label: 'Hesap & Ayarlar', path: '/settings', icon: Settings, color: 'bg-gray-500 text-white' },
+    { id: 'nav-coach-dashboard', label: 'Koç Kontrol Paneli', path: '/dashboard', icon: LayoutDashboard },
+    { id: 'nav-coach-coaching', label: 'Öğrenci Soru & Canlı Mesajlaşma', path: '/coaching', icon: MessageSquare },
+    { id: 'nav-coach-ai-analytics', label: 'YKS AI Analiz Motoru', path: '/ai-analytics', icon: Sparkles },
+    { id: 'nav-coach-students', label: 'Kayıtlı Öğrencilerim', path: '/students', icon: Users },
+    { id: 'nav-coach-program', label: 'Haftalık Program Hazırlayıcı', path: '/program-advisor', icon: CalendarDays },
+    { id: 'nav-coach-settings', label: 'Hesap & Ayarlar', path: '/settings', icon: Settings },
   ];
 
   const adminNavItems = [
-    { id: 'nav-admin-dashboard', label: 'Hesap & Onay Masası', path: '/admin', icon: ShieldCheck, color: 'bg-blue-600 text-white' },
-    { id: 'nav-admin-settings', label: 'Hesap & Ayarlar', path: '/settings', icon: Settings, color: 'bg-gray-500 text-white' },
+    { id: 'nav-admin-dashboard', label: 'Hesap & Onay Masası', path: '/admin', icon: ShieldCheck },
+    { id: 'nav-admin-storage', label: 'Bulut Depolama & Kota', path: '/admin/storage', icon: HardDrive },
+    { id: 'nav-admin-settings', label: 'Hesap & Ayarlar', path: '/settings', icon: Settings },
   ];
 
   const navItems = isAdmin ? adminNavItems : isCoach ? coachNavItems : studentNavItems;
@@ -89,32 +91,13 @@ export const Sidebar: React.FC = () => {
 
           <div className={`flex items-center ${isCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'}`}>
             <div className={`flex items-center ${isCollapsed ? 'flex-col gap-1.5' : 'gap-2.5'}`}>
-              <div
+              <StudiiLogo
+                size="md"
+                collapsed={isCollapsed}
+                showBadge={!isCollapsed}
+                badgeText="v0.8 BETA"
                 onClick={() => isCollapsed && toggleSidebarCollapsed()}
-                className="w-10 h-10 rounded-2xl overflow-hidden shadow-sm cursor-pointer border border-black/[0.08] shrink-0 hover:scale-105 transition-transform"
-                title={isCollapsed ? 'Menüyü Genişlet' : 'Karne YKS'}
-              >
-                <img
-                  src="/logo.jpg"
-                  alt="Karne Logo"
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              {!isCollapsed && (
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-extrabold text-base text-[#1D1D1F] tracking-tight">Karne</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-semibold bg-black/[0.05] text-[#1D1D1F]">
-                      v2.0
-                    </span>
-                  </div>
-                  <p className="text-[11px] font-medium text-[#86868B] flex items-center gap-1">
-                    <span>YKS 2026</span>
-                    <span className="text-[#0071E3] font-semibold">• Pro</span>
-                  </p>
-                </div>
-              )}
+              />
             </div>
 
             {/* Desktop collapse toggle button */}
@@ -122,7 +105,7 @@ export const Sidebar: React.FC = () => {
               <button
                 type="button"
                 onClick={toggleSidebarCollapsed}
-                className="hidden lg:flex p-1.5 rounded-xl text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04] transition-colors"
+                className="hidden lg:flex p-1.5 rounded-xl text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04] transition-colors cursor-pointer"
                 title="Menüyü Daralt"
                 aria-label="Menüyü Daralt"
               >
@@ -134,7 +117,7 @@ export const Sidebar: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="lg:hidden p-2 rounded-xl text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04] transition-colors"
+              className="lg:hidden p-2 rounded-xl text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04] transition-colors cursor-pointer"
               aria-label="Menüyü Kapat"
             >
               <X className="w-5 h-5" />
@@ -146,7 +129,7 @@ export const Sidebar: React.FC = () => {
             <button
               type="button"
               onClick={toggleSidebarCollapsed}
-              className="hidden lg:flex w-full mt-2 py-1 items-center justify-center rounded-xl text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04] transition-colors"
+              className="hidden lg:flex w-full mt-2 py-1 items-center justify-center rounded-xl text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04] transition-colors cursor-pointer"
               title="Menüyü Genişlet"
             >
               <PanelLeftOpen className="w-4 h-4" />
@@ -154,7 +137,7 @@ export const Sidebar: React.FC = () => {
           )}
 
           {/* Active User Apple ID Card */}
-          <div className={`mt-3 rounded-2xl bg-white/70 backdrop-blur-md border border-black/[0.06] shadow-xs transition-all ${isCollapsed ? 'p-2' : 'p-2.5'}`}>
+          <div className={`mt-3 rounded-2xl bg-black/[0.02] border border-black/[0.06] transition-all ${isCollapsed ? 'p-2' : 'p-2.5'}`}>
             <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white shrink-0 bg-gradient-to-br from-[#0071E3] to-[#5856D6] shadow-xs"
@@ -169,10 +152,10 @@ export const Sidebar: React.FC = () => {
                     <span
                       className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
                         isAdmin
-                          ? 'bg-purple-500/10 text-purple-600'
+                          ? 'bg-[#AF52DE]/10 text-[#AF52DE]'
                           : isCoach
-                          ? 'bg-emerald-500/10 text-emerald-600'
-                          : 'bg-blue-500/10 text-blue-600'
+                          ? 'bg-[#34C759]/10 text-[#34C759]'
+                          : 'bg-[#0071E3]/10 text-[#0071E3]'
                       }`}
                     >
                       {isAdmin ? (
@@ -210,8 +193,8 @@ export const Sidebar: React.FC = () => {
                   setIsMobileMenuOpen(false);
                 }}
                 title={isCollapsed ? item.label : undefined}
-                className={`w-full flex items-center rounded-xl text-xs font-medium transition-all min-h-[38px] ${
-                  isCollapsed ? 'justify-center px-0 py-2' : 'justify-between px-2.5 py-2 text-left'
+                className={`w-full flex items-center rounded-xl text-xs font-medium transition-all min-h-[38px] cursor-pointer ${
+                  isCollapsed ? 'justify-center px-0 py-2' : 'justify-between px-3 py-2 text-left'
                 } ${
                   isActive
                     ? 'bg-[#0071E3] text-white shadow-xs font-semibold'
@@ -221,10 +204,10 @@ export const Sidebar: React.FC = () => {
                 <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
                   <div
                     className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                      isActive ? 'bg-white/20 text-white' : 'text-[#1D1D1F]'
+                      isActive ? 'bg-white/20 text-white' : 'text-[#86868B]'
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className="w-4 h-4" />
                   </div>
                   {!isCollapsed && <span className="truncate">{item.label}</span>}
                 </div>
@@ -232,6 +215,11 @@ export const Sidebar: React.FC = () => {
             );
           })}
         </nav>
+
+        {/* System Health Indicator (Supabase & Latency) for Admin */}
+        {isAdmin && (
+          <SystemHealthIndicator isCollapsed={isCollapsed} />
+        )}
       </div>
 
       {/* Bottom Controls */}
@@ -240,7 +228,7 @@ export const Sidebar: React.FC = () => {
         <button
           type="button"
           onClick={toggleSidebarCollapsed}
-          className="hidden lg:flex w-full items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-medium text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04] rounded-xl transition-colors"
+          className="hidden lg:flex w-full items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-medium text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04] rounded-xl transition-colors cursor-pointer"
           title={isCollapsed ? 'Menüyü Genişlet' : 'Menüyü Daralt'}
         >
           {isCollapsed ? (
@@ -262,7 +250,7 @@ export const Sidebar: React.FC = () => {
             setIsMobileMenuOpen(false);
           }}
           title={isCollapsed ? 'Oturumu Kapat' : undefined}
-          className={`w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-[#FF3B30] hover:bg-[#FF3B30]/10 rounded-xl transition-colors min-h-[38px] ${
+          className={`w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-[#FF3B30] hover:bg-[#FF3B30]/10 rounded-xl transition-colors min-h-[38px] cursor-pointer ${
             isCollapsed ? 'px-0' : 'px-3'
           }`}
         >
@@ -278,7 +266,7 @@ export const Sidebar: React.FC = () => {
       {/* Desktop Sticky Sidebar (Visible on lg and above) */}
       <aside
         id="desktop-sidebar"
-        className={`hidden lg:flex flex-shrink-0 bg-white/75 backdrop-blur-2xl border-r border-black/[0.08] flex-col h-screen sticky top-0 transition-all duration-300 ${
+        className={`hidden lg:flex flex-shrink-0 bg-white/90 backdrop-blur-2xl border-r border-black/[0.08] flex-col h-screen sticky top-0 transition-all duration-300 shadow-xs ${
           isSidebarCollapsed ? 'w-20' : 'w-64'
         }`}
       >
@@ -290,12 +278,12 @@ export const Sidebar: React.FC = () => {
         <div className="lg:hidden fixed inset-0 z-50 flex">
           {/* Backdrop overlay */}
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-black/30 backdrop-blur-xs transition-opacity"
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
           {/* Sliding Drawer */}
-          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white/95 backdrop-blur-2xl shadow-2xl border-r border-black/[0.08] z-10 animate-in slide-in-from-left duration-200">
+          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white backdrop-blur-2xl shadow-2xl border-r border-black/[0.08] z-10 animate-in slide-in-from-left duration-200">
             {renderSidebarContent(false)}
           </div>
         </div>
@@ -303,4 +291,3 @@ export const Sidebar: React.FC = () => {
     </>
   );
 };
-

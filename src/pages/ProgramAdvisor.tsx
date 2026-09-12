@@ -10,10 +10,12 @@ import {
   Layers,
   Sparkles,
   Users,
+  Download,
 } from 'lucide-react';
 import { StudyProgram, ProgramItem } from '../types';
 import { programService } from '../lib/programService';
 import { coachService, CoachStudent } from '../lib/coachService';
+import { downloadCalendarICS } from '../lib/icsExporter';
 import { EditProgramItemModal } from '../components/EditProgramItemModal';
 import { WeeklyCalendarView } from '../components/WeeklyCalendarView';
 import { ProgramHistory } from '../components/ProgramHistory';
@@ -220,6 +222,19 @@ export const ProgramAdvisor: React.FC<ProgramAdvisorProps> = ({
                 ))}
               </select>
             </div>
+          )}
+
+          {activeProgram && activeProgram.items && activeProgram.items.length > 0 && (
+            <button
+              type="button"
+              id="btn-export-calendar-ics"
+              onClick={() => downloadCalendarICS(activeProgram.items!, activeProgram.week_start_date, effectiveStudentName)}
+              className="apple-btn-secondary py-2.5 px-4 text-xs font-semibold rounded-full flex items-center gap-1.5 cursor-pointer"
+              title="Apple Calendar, Google Calendar ve Outlook ile uyumlu .ics takvim dosyası indir"
+            >
+              <Download className="w-4 h-4 text-[#0071E3]" />
+              <span>Takvime Aktar (.ICS)</span>
+            </button>
           )}
 
           <button

@@ -1,66 +1,49 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { usersService } from '../lib/usersService';
 import {
-  Settings as SettingsIcon,
   User,
   Mail,
   Phone,
   Lock,
-  GraduationCap,
-  ShieldCheck,
+  Save,
   CheckCircle2,
   AlertCircle,
-  Save,
-  Building,
+  ShieldCheck,
+  GraduationCap,
   Target,
-  Sparkles,
   Trophy,
   Flame,
   ArrowRight,
 } from 'lucide-react';
+import { usersService } from '../lib/usersService';
 
 export const Settings: React.FC = () => {
   const { user, refreshCurrentUser, navigate } = useAuth();
 
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [field, setField] = useState<'SAY' | 'EA' | 'SÖZ' | 'DİL'>((user?.field as any) || 'SAY');
+  const [specialty, setSpecialty] = useState(user?.coaching_specialty || '');
   const [targetUniv, setTargetUniv] = useState(user?.target_university || '');
   const [targetDept, setTargetDept] = useState(user?.target_department || '');
   const [targetRank, setTargetRank] = useState(user?.target_rank || '');
-  const [specialty, setSpecialty] = useState(user?.coaching_specialty || '');
+  const [field, setField] = useState<'SAY' | 'EA' | 'SÖZ' | 'DİL'>(user?.field || 'SAY');
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [loading, setLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   if (!user) return null;
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setSuccessMsg(null);
-    setErrorMsg(null);
+    setSuccessMsg('');
+    setErrorMsg('');
 
     try {
-      const updates: any = {
-        full_name: fullName,
-        phone,
-      };
-
-      if (user.role === 'student') {
-        updates.field = field;
-        updates.target_university = targetUniv;
-        updates.target_department = targetDept;
-        updates.target_rank = targetRank;
-      } else if (user.role === 'coach') {
-        updates.coaching_specialty = specialty;
-      }
-
       if (newPassword) {
         if (newPassword.length < 6) {
           throw new Error('Yeni şifre en az 6 karakter olmalıdır.');
@@ -68,42 +51,50 @@ export const Settings: React.FC = () => {
         if (newPassword !== confirmPassword) {
           throw new Error('Şifreler birbiriyle eşleşmiyor.');
         }
-        updates.password = newPassword;
       }
 
-      await usersService.updateUserProfile(user.id, updates);
-      await refreshCurrentUser();
+      await usersService.updateUserProfile(user.id, {
+        full_name: fullName.trim(),
+        phone: phone.trim() || undefined,
+        coaching_specialty: user.role === 'coach' ? specialty.trim() || undefined : undefined,
+        target_university: user.role === 'student' ? targetUniv.trim() || undefined : undefined,
+        target_department: user.role === 'student' ? targetDept.trim() || undefined : undefined,
+        target_rank: user.role === 'student' ? targetRank.trim() || undefined : undefined,
+        field: user.role === 'student' ? field : undefined,
+        ...(newPassword ? { password: newPassword } : {}),
+      });
 
-      setSuccessMsg('Profil ve hesap bilgileriniz başarıyla güncellendi.');
+      await refreshCurrentUser();
+      setSuccessMsg('Profil ve hesap ayarlarınız başarıyla güncellendi.');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Güncelleme yapılırken bir hata oluştu.');
+      setErrorMsg(err.message || 'Ayarlar güncellenirken bir hata oluştu.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div id="settings-page" className="space-y-6 max-w-4xl mx-auto">
-      {/* Header Banner */}
-      <div className="bento-card p-6 sm:p-8 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center font-bold">
-            <SettingsIcon className="w-7 h-7" />
+    <div id="settings-page" className="max-w-4xl mx-auto space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center font-bold text-lg shadow-xs">
+            {user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-[#1D1D1F] tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#1D1D1F] tracking-tight">
               Hesap & Profil Ayarları
             </h1>
-            <p className="text-xs text-[#86868B] mt-1">
+            <p className="text-xs sm:text-sm text-[#86868B] mt-0.5">
               Kişisel bilgilerinizi, hedef tercihlerinizi ve şifrenizi güncelleyin.
             </p>
           </div>
         </div>
 
         {/* Role Pill */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#F5F5F7] border border-black/[0.06] text-[#1D1D1F] self-start sm:self-auto">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-[#F5F5F7] border border-black/[0.06] text-[#1D1D1F] self-start sm:self-auto">
           {user.role === 'admin' ? (
             <ShieldCheck className="w-4 h-4 text-[#FF9500]" />
           ) : user.role === 'coach' ? (
@@ -121,19 +112,19 @@ export const Settings: React.FC = () => {
         </div>
       </div>
 
-      {/* Student Badges & Profile CTA Banner */}
+      {/* Student Badges & Profile CTA Card (Light Apple Style) */}
       {user.role === 'student' && (
-        <div className="bento-card p-5.5 bg-[#1D1D1F] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bento-card p-5.5 bg-white border border-black/[0.06] text-[#1D1D1F] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-[#FF9500] text-white flex items-center justify-center shadow-xs shrink-0">
+            <div className="w-11 h-11 rounded-2xl bg-[#FF9500]/10 text-[#FF9500] border border-[#FF9500]/20 flex items-center justify-center shadow-xs shrink-0">
               <Trophy className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold flex items-center gap-1.5 text-[#1D1D1F]">
                 <span>Başarı Rozetleri & Günlük Seri Sayfası</span>
                 <Flame className="w-4 h-4 text-[#FF9500]" />
               </h3>
-              <p className="text-xs text-white/70 mt-0.5">
+              <p className="text-xs text-[#86868B] mt-0.5">
                 Kazanılan rozetlerinizi, çalışma serilerini ve seviye puanlarınızı inceleyin.
               </p>
             </div>
@@ -142,7 +133,7 @@ export const Settings: React.FC = () => {
             type="button"
             id="btn-goto-profile-badges"
             onClick={() => navigate('/profile')}
-            className="py-2 px-4 rounded-full bg-white text-[#1D1D1F] hover:bg-white/90 text-xs font-medium transition-all shadow-xs shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+            className="apple-btn-secondary py-2 px-4 rounded-full text-xs font-medium shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <span>Rozetleri Görüntüle</span>
             <ArrowRight className="w-3.5 h-3.5 text-[#0071E3]" />
@@ -152,14 +143,14 @@ export const Settings: React.FC = () => {
 
       {/* Feedback Messages */}
       {successMsg && (
-        <div className="p-4 rounded-2xl bg-[#34C759]/10 border border-[#34C759]/20 text-[#34C759] text-xs font-semibold flex items-center gap-2">
+        <div className="p-4 rounded-2xl bg-[#34C759]/10 border border-[#34C759]/20 text-[#34C759] text-xs font-medium flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{successMsg}</span>
         </div>
       )}
 
       {errorMsg && (
-        <div className="p-4 rounded-2xl bg-[#FF3B30]/10 border border-[#FF3B30]/20 text-[#FF3B30] text-xs font-semibold flex items-center gap-2">
+        <div className="p-4 rounded-2xl bg-[#FF3B30]/10 border border-[#FF3B30]/20 text-[#FF3B30] text-xs font-medium flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{errorMsg}</span>
         </div>
@@ -167,15 +158,15 @@ export const Settings: React.FC = () => {
 
       {/* Main Settings Form */}
       <form onSubmit={handleSaveProfile} className="space-y-6">
-        <div className="bento-card p-6 sm:p-8 bg-white space-y-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#86868B] flex items-center gap-2 border-b border-black/[0.06] pb-3">
+        <div className="bento-card p-6 sm:p-8 bg-white border border-black/[0.06] space-y-5">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-[#86868B] flex items-center gap-2 border-b border-black/[0.06] pb-3">
             <User className="w-4 h-4 text-[#0071E3]" />
             <span>Kişisel Bilgiler</span>
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+              <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                 Ad Soyad
               </label>
               <div className="relative">
@@ -185,13 +176,13 @@ export const Settings: React.FC = () => {
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full pl-9 pr-3.5 py-2.5 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3] focus:bg-white transition-colors"
+                  className="apple-input w-full pl-9!"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+              <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                 E-Posta Adresi
               </label>
               <div className="relative">
@@ -200,14 +191,14 @@ export const Settings: React.FC = () => {
                   type="email"
                   disabled
                   value={user.email || ''}
-                  className="w-full pl-9 pr-3.5 py-2.5 bg-[#F5F5F7]/50 border border-black/[0.04] rounded-xl text-xs text-[#86868B] cursor-not-allowed"
+                  className="apple-input w-full pl-9! opacity-60 cursor-not-allowed"
                 />
               </div>
               <p className="text-[10px] text-[#86868B] mt-1">E-posta adresi değiştirilemez.</p>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+              <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                 Telefon Numarası
               </label>
               <div className="relative">
@@ -217,14 +208,14 @@ export const Settings: React.FC = () => {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="05XX XXX XX XX"
-                  className="w-full pl-9 pr-3.5 py-2.5 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3] focus:bg-white transition-colors"
+                  className="apple-input w-full pl-9!"
                 />
               </div>
             </div>
 
             {user.role === 'coach' && (
               <div>
-                <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+                <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                   Koçluk Uzmanlık Alanı
                 </label>
                 <input
@@ -232,7 +223,7 @@ export const Settings: React.FC = () => {
                   value={specialty}
                   onChange={(e) => setSpecialty(e.target.value)}
                   placeholder="Örn: YKS Derece & Sayısal Rehberlik"
-                  className="w-full py-2.5 px-3.5 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3] focus:bg-white transition-colors"
+                  className="apple-input w-full"
                 />
               </div>
             )}
@@ -241,20 +232,20 @@ export const Settings: React.FC = () => {
           {/* Student Specific Fields */}
           {user.role === 'student' && (
             <div className="pt-4 border-t border-black/[0.06] space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#86868B] flex items-center gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#86868B] flex items-center gap-2">
                 <Target className="w-3.5 h-3.5 text-[#0071E3]" />
                 <span>YKS Hazırlık & Hedef Tercihleri</span>
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+                  <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                     Alan
                   </label>
                   <select
                     value={field}
                     onChange={(e) => setField(e.target.value as any)}
-                    className="w-full py-2 px-3 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs font-semibold text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                    className="apple-input w-full font-semibold"
                   >
                     <option value="SAY">Sayısal (SAY)</option>
                     <option value="EA">Eşit Ağırlık (EA)</option>
@@ -264,7 +255,7 @@ export const Settings: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+                  <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                     Hedef Üniversite
                   </label>
                   <input
@@ -272,12 +263,12 @@ export const Settings: React.FC = () => {
                     value={targetUniv}
                     onChange={(e) => setTargetUniv(e.target.value)}
                     placeholder="Örn: Boğaziçi Üniversitesi"
-                    className="w-full py-2 px-3 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                    className="apple-input w-full"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+                  <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                     Hedef Bölüm
                   </label>
                   <input
@@ -285,12 +276,12 @@ export const Settings: React.FC = () => {
                     value={targetDept}
                     onChange={(e) => setTargetDept(e.target.value)}
                     placeholder="Örn: Bilgisayar Mühendisliği"
-                    className="w-full py-2 px-3 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                    className="apple-input w-full"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+                  <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                     Hedef Sıralama
                   </label>
                   <input
@@ -298,7 +289,7 @@ export const Settings: React.FC = () => {
                     value={targetRank}
                     onChange={(e) => setTargetRank(e.target.value)}
                     placeholder="Örn: İlk 1.000"
-                    className="w-full py-2 px-3 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                    className="apple-input w-full"
                   />
                 </div>
               </div>
@@ -307,15 +298,15 @@ export const Settings: React.FC = () => {
         </div>
 
         {/* Password Update Card */}
-        <div className="bento-card p-6 sm:p-8 bg-white space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#86868B] flex items-center gap-2 border-b border-black/[0.06] pb-3">
+        <div className="bento-card p-6 sm:p-8 bg-white border border-black/[0.06] space-y-4">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-[#86868B] flex items-center gap-2 border-b border-black/[0.06] pb-3">
             <Lock className="w-4 h-4 text-[#0071E3]" />
             <span>Şifre Değiştir</span>
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+              <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                 Yeni Şifre
               </label>
               <input
@@ -323,12 +314,12 @@ export const Settings: React.FC = () => {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Boş bırakırsanız değişmez"
-                className="w-full py-2.5 px-3.5 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                className="apple-input w-full"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
+              <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
                 Yeni Şifre Tekrar
               </label>
               <input
@@ -336,7 +327,7 @@ export const Settings: React.FC = () => {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Yeni şifreyi tekrar yazın"
-                className="w-full py-2.5 px-3.5 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                className="apple-input w-full"
               />
             </div>
           </div>

@@ -2,28 +2,23 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Clock,
   Plus,
-  Filter,
   Search,
   Calendar,
-  Tag,
   Trash2,
   RefreshCw,
   SlidersHorizontal,
   Flame,
-  CheckCircle2,
   BarChart3,
-  Layers,
   Timer,
   FileEdit,
-  TrendingUp,
-  Sparkles,
   Zap,
   CalendarDays,
   ListFilter,
+  ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { StudySession, SessionSource, TimeLogEntry } from '../types';
-import { studySessionsService, DayStudyData } from '../lib/studySessionsService';
+import { StudySession, TimeLogEntry } from '../types';
+import { studySessionsService } from '../lib/studySessionsService';
 import { DailyTimeLogTimeline } from '../components/DailyTimeLogTimeline';
 import { ManualSessionModal } from '../components/ManualSessionModal';
 import { WeeklyTargetCard } from '../components/WeeklyTargetCard';
@@ -31,18 +26,18 @@ import { WeeklyBarChart } from '../components/WeeklyBarChart';
 import { StudyHeatmap } from '../components/StudyHeatmap';
 
 const SUBJECT_COLORS: Record<string, string> = {
-  Matematik: 'bg-[#1B2A4A]/10 text-[#1B2A4A] border-[#1B2A4A]/30',
-  Fizik: 'bg-[#255A8A]/10 text-[#255A8A] border-[#255A8A]/30',
-  Kimya: 'bg-[#D97736]/10 text-[#D97736] border-[#D97736]/30',
-  Biyoloji: 'bg-[#2E6B4F]/10 text-[#2E6B4F] border-[#2E6B4F]/30',
-  Türkçe: 'bg-[#C0392B]/10 text-[#C0392B] border-[#C0392B]/30',
-  Geometri: 'bg-[#4A3E72]/10 text-[#4A3E72] border-[#4A3E72]/30',
-  Tarih: 'bg-[#8B5A2B]/10 text-[#8B5A2B] border-[#8B5A2B]/30',
-  Coğrafya: 'bg-[#3B7A57]/10 text-[#3B7A57] border-[#3B7A57]/30',
-  Felsefe: 'bg-[#6C757D]/10 text-[#6C757D] border-[#6C757D]/30',
-  'Din Kültürü': 'bg-[#5C6F84]/10 text-[#5C6F84] border-[#5C6F84]/30',
-  'Genel Deneme': 'bg-[#1B2A4A]/15 text-[#1B2A4A] border-[#1B2A4A]/40',
-  Diğer: 'bg-[#7E8D9F]/10 text-[#7E8D9F] border-[#7E8D9F]/30',
+  Matematik: 'bg-[#0071E3]/10 text-[#0071E3] border-[#0071E3]/20',
+  Fizik: 'bg-[#5856D6]/10 text-[#5856D6] border-[#5856D6]/20',
+  Kimya: 'bg-[#FF9500]/10 text-[#FF9500] border-[#FF9500]/20',
+  Biyoloji: 'bg-[#34C759]/10 text-[#34C759] border-[#34C759]/20',
+  Türkçe: 'bg-[#FF2D55]/10 text-[#FF2D55] border-[#FF2D55]/20',
+  Geometri: 'bg-[#AF52DE]/10 text-[#AF52DE] border-[#AF52DE]/20',
+  Tarih: 'bg-[#A2845E]/10 text-[#A2845E] border-[#A2845E]/20',
+  Coğrafya: 'bg-[#30B0C7]/10 text-[#30B0C7] border-[#30B0C7]/20',
+  Felsefe: 'bg-[#8E8E93]/10 text-[#8E8E93] border-[#8E8E93]/20',
+  'Din Kültürü': 'bg-[#63E6E2]/10 text-[#007A78] border-[#63E6E2]/30',
+  'Genel Deneme': 'bg-[#0071E3]/15 text-[#0071E3] border-[#0071E3]/30',
+  Diğer: 'bg-[#8E8E93]/10 text-[#8E8E93] border-[#8E8E93]/20',
 };
 
 export const StudyLog: React.FC = () => {
@@ -177,19 +172,19 @@ export const StudyLog: React.FC = () => {
 
   return (
     <div id="study-log-page" className="space-y-6">
-      {/* Top Header & Navigation Banner to Focus Room */}
+      {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#2E6B4F]/10 text-[#2E6B4F] border border-[#2E6B4F]/20">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#34C759]/10 text-[#34C759] border border-[#34C759]/20">
               DÜZENLİ ÇALIŞMA GÜNLÜĞÜ
             </span>
-            <span className="text-xs text-[#7E8D9F] font-bold">YKS 2026</span>
+            <span className="text-xs text-[#86868B] font-medium">YKS 2026</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-[#1B2A4A] tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#1D1D1F] tracking-tight">
             Çalışma Günlüğü & Analiz
           </h1>
-          <p className="text-xs sm:text-sm text-[#4A5B78] mt-1">
+          <p className="text-xs sm:text-sm text-[#86868B] mt-1">
             Haftalık çalışma grafikleri, günlük zaman çizelgesi ve geçmiş seans kayıtları
           </p>
         </div>
@@ -197,7 +192,7 @@ export const StudyLog: React.FC = () => {
         <div className="flex items-center gap-2.5">
           <button
             onClick={loadData}
-            className="p-2.5 rounded-xl border border-[#DFD9CC] bg-white hover:bg-[#EFEBE0] text-[#1B2A4A] transition-colors"
+            className="p-2.5 rounded-full border border-black/[0.08] bg-white hover:bg-[#F5F5F7] text-[#1D1D1F] transition-colors cursor-pointer"
             title="Verileri Yenile"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -206,31 +201,31 @@ export const StudyLog: React.FC = () => {
           <button
             id="btn-open-manual-session-modal"
             onClick={() => setIsManualModalOpen(true)}
-            className="py-2.5 px-4 bg-white border border-[#DFD9CC] hover:bg-[#F7F4EE] text-[#1B2A4A] text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center gap-2"
+            className="apple-btn-secondary py-2.5 px-4 text-xs font-medium rounded-full inline-flex items-center gap-2 cursor-pointer"
           >
-            <Plus className="w-4 h-4 text-[#D97736]" />
+            <Plus className="w-4 h-4 text-[#0071E3]" />
             <span>Manuel Giriş Ekle</span>
           </button>
         </div>
       </div>
 
-      {/* Hero Invitation to the Ultra-Cool Dopamine Focus Room */}
-      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-[#1B2A4A] via-[#255A8A] to-[#1B2A4A] text-white shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+      {/* Focus Room Banner (Apple Clean Style) */}
+      <div className="bento-card p-5 sm:p-6 bg-white border border-black/[0.06] text-[#1D1D1F] flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center shrink-0 border border-white/20">
-            <Flame className="w-7 h-7 text-[#D97736] animate-pulse" />
+          <div className="w-12 h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] border border-[#0071E3]/20 flex items-center justify-center shrink-0 shadow-xs">
+            <Flame className="w-6 h-6 animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider bg-[#D97736] text-white px-2 py-0.5 rounded-md">
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-[#0071E3]/10 text-[#0071E3] border border-[#0071E3]/20 px-2.5 py-0.5 rounded-full">
                 YENİ
               </span>
-              <h3 className="text-base sm:text-lg font-black tracking-tight">
+              <h3 className="text-base sm:text-lg font-bold tracking-tight text-[#1D1D1F]">
                 Dikkat Dağıtmayan Odak Kronometresi
               </h3>
             </div>
-            <p className="text-xs text-white/80 mt-1 max-w-xl">
-              1000000x cool arayüz, 40Hz binaural & yağmur sesleri, seviye atlama çarpanları ve dopamin ödülleriyle ders çalışmaya hemen başla!
+            <p className="text-xs text-[#86868B] mt-1 max-w-xl">
+              Canlı süre sayacı, arka plan ambiyans sesleri ve dopamin çarpanlarıyla ders çalışmaya hemen başlayın.
             </p>
           </div>
         </div>
@@ -238,15 +233,16 @@ export const StudyLog: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate('/focus')}
-          className="w-full md:w-auto px-6 py-3 bg-[#D97736] hover:bg-[#C06020] text-white text-xs font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 shrink-0 transform active:scale-95"
+          className="apple-btn-primary w-full md:w-auto px-5 py-2.5 text-xs font-semibold rounded-full flex items-center justify-center gap-2 shrink-0 cursor-pointer"
         >
           <Zap className="w-4 h-4 fill-white" />
-          <span>Odak Odasına Geç 🚀</span>
+          <span>Odak Odasına Geç</span>
+          <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Crisp 3-Tab Selector to Eliminate Sensory Overload */}
-      <div className="flex items-center gap-2 border-b border-[#DFD9CC] pb-3 overflow-x-auto">
+      {/* 3-Tab Selector */}
+      <div className="flex items-center gap-1.5 p-1 bg-black/[0.04] rounded-full border border-black/[0.06] w-fit overflow-x-auto">
         {[
           { id: 'analytics', label: '📊 Haftalık Rapor & Grafikler', icon: BarChart3 },
           { id: 'timeline', label: '📅 Günlük Zaman Çizelgesi', icon: CalendarDays },
@@ -256,10 +252,10 @@ export const StudyLog: React.FC = () => {
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id as any)}
-            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 whitespace-nowrap ${
+            className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
               activeTab === tab.id
-                ? 'bg-[#1B2A4A] text-white shadow-xs'
-                : 'bg-white border border-[#DFD9CC] text-[#4A5B78] hover:bg-[#F7F4EE]'
+                ? 'bg-white text-[#1D1D1F] shadow-xs font-semibold'
+                : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
             <span>{tab.label}</span>
@@ -269,9 +265,8 @@ export const StudyLog: React.FC = () => {
 
       {/* TAB 1: Haftalık Rapor & Grafikler */}
       {activeTab === 'analytics' && (
-        <div className="space-y-6 animate-in fade-in-50 duration-200">
-          {/* Bento Grid: Weekly Target & Weekly Bar Chart */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <WeeklyTargetCard
               studentId={studentId}
               weeklyTotalMinutes={weekStats.totalMinutes}
@@ -285,14 +280,13 @@ export const StudyLog: React.FC = () => {
             />
           </div>
 
-          {/* 12-Week Study Heatmap */}
           <StudyHeatmap days={heatmapDays} />
         </div>
       )}
 
       {/* TAB 2: Günlük Zaman Çizelgesi */}
       {activeTab === 'timeline' && (
-        <div className="animate-in fade-in-50 duration-200">
+        <div>
           <DailyTimeLogTimeline
             logs={timeLogs}
             onLogDeleted={handleLogDeleted}
@@ -304,12 +298,12 @@ export const StudyLog: React.FC = () => {
 
       {/* TAB 3: Tüm Kayıtlar & Filtreleme */}
       {activeTab === 'history' && (
-        <div className="space-y-4 animate-in fade-in-50 duration-200">
+        <div className="space-y-4">
           {/* Filter Toolbar */}
-          <div className="bg-white border border-[#DFD9CC] rounded-2xl p-4 shadow-xs space-y-3">
+          <div className="bento-card bg-white border border-black/[0.06] rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#1B2A4A]">
-                <SlidersHorizontal className="w-4 h-4 text-[#D97736]" />
+              <div className="flex items-center gap-2 text-xs font-bold text-[#1D1D1F]">
+                <SlidersHorizontal className="w-4 h-4 text-[#0071E3]" />
                 <span>Kayıt Filtreleri ve Arama</span>
               </div>
 
@@ -321,7 +315,7 @@ export const StudyLog: React.FC = () => {
                     setDateRange('this_week');
                     setSearchQuery('');
                   }}
-                  className="text-[11px] font-bold text-[#C0392B] hover:underline"
+                  className="text-[11px] font-medium text-[#FF3B30] hover:underline cursor-pointer"
                 >
                   Filtreleri Temizle
                 </button>
@@ -331,13 +325,13 @@ export const StudyLog: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Search Box */}
               <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-[#7E8D9F]" />
+                <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-[#86868B]" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Konu veya ders ara..."
-                  className="w-full pl-9 pr-3 py-2 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs text-[#1B2A4A] focus:outline-none focus:border-[#1B2A4A] placeholder:text-[#7E8D9F]"
+                  className="apple-input w-full pl-9!"
                 />
               </div>
 
@@ -346,7 +340,7 @@ export const StudyLog: React.FC = () => {
                 <select
                   value={selectedSubject}
                   onChange={(e) => setSelectedSubject(e.target.value)}
-                  className="w-full py-2 px-3 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs font-bold text-[#1B2A4A] focus:outline-none focus:border-[#1B2A4A]"
+                  className="apple-input w-full"
                 >
                   <option value="all">Tüm Dersler ({sessions.length})</option>
                   {availableSubjects.map((subj) => (
@@ -362,7 +356,7 @@ export const StudyLog: React.FC = () => {
                 <select
                   value={selectedSource}
                   onChange={(e) => setSelectedSource(e.target.value)}
-                  className="w-full py-2 px-3 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs font-bold text-[#1B2A4A] focus:outline-none focus:border-[#1B2A4A]"
+                  className="apple-input w-full"
                 >
                   <option value="all">Tüm Kaynaklar</option>
                   <option value="timer">⏱️ Sadece Canlı Timer</option>
@@ -375,7 +369,7 @@ export const StudyLog: React.FC = () => {
                 <select
                   value={dateRange}
                   onChange={(e) => setDateRange(e.target.value as any)}
-                  className="w-full py-2 px-3 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs font-bold text-[#1B2A4A] focus:outline-none focus:border-[#1B2A4A]"
+                  className="apple-input w-full"
                 >
                   <option value="this_week">Bu Hafta (Pzt – Paz)</option>
                   <option value="30days">Son 30 Gün</option>
@@ -386,24 +380,24 @@ export const StudyLog: React.FC = () => {
             </div>
 
             {/* Quick Filter Summary Metrics */}
-            <div className="pt-2 border-t border-[#DFD9CC] flex flex-wrap items-center justify-between gap-3 text-xs text-[#7E8D9F]">
+            <div className="pt-2 border-t border-black/[0.06] flex flex-wrap items-center justify-between gap-3 text-xs text-[#86868B]">
               <div className="flex items-center gap-4">
                 <span>
-                  Listelenen: <strong>{filteredSessions.length} Oturum</strong>
+                  Listelenen: <strong className="text-[#1D1D1F] font-semibold">{filteredSessions.length} Oturum</strong>
                 </span>
                 <span>
-                  Toplam Süre: <strong className="text-[#1B2A4A]">{filteredTotalHours} Saat</strong> ({filteredTotalMinutes} dk)
+                  Toplam Süre: <strong className="text-[#0071E3] font-semibold">{filteredTotalHours} Saat</strong> ({filteredTotalMinutes} dk)
                 </span>
                 <span>
-                  Ortalama Seans: <strong>{avgSessionMinutes} dk</strong>
+                  Ortalama Seans: <strong className="text-[#1D1D1F] font-semibold">{avgSessionMinutes} dk</strong>
                 </span>
               </div>
 
               <div className="flex items-center gap-2 text-[11px]">
-                <span className="px-2 py-0.5 rounded-md bg-[#1B2A4A]/10 text-[#1B2A4A] font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#0071E3]/10 text-[#0071E3] font-medium">
                   ⏱️ Timer: {filteredSessions.filter((s) => s.source === 'timer').length}
                 </span>
-                <span className="px-2 py-0.5 rounded-md bg-[#255A8A]/10 text-[#255A8A] font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#34C759]/10 text-[#34C759] font-medium">
                   ✍️ Manuel: {filteredSessions.filter((s) => s.source === 'manual').length}
                 </span>
               </div>
@@ -411,40 +405,40 @@ export const StudyLog: React.FC = () => {
           </div>
 
           {/* Historical Study Sessions List */}
-          <div className="bg-white border border-[#DFD9CC] rounded-2xl overflow-hidden shadow-xs">
-            <div className="px-6 py-4 border-b border-[#DFD9CC] bg-[#F7F4EE] flex items-center justify-between">
+          <div className="bento-card bg-white border border-black/[0.06] rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-black/[0.06] bg-[#F5F5F7] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[#1B2A4A] text-white flex items-center justify-center font-bold text-xs">
+                <div className="w-7 h-7 rounded-xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center font-bold text-xs">
                   <Clock className="w-3.5 h-3.5" />
                 </div>
-                <h2 className="text-sm font-extrabold text-[#1B2A4A] tracking-tight">
+                <h2 className="text-sm font-bold text-[#1D1D1F] tracking-tight">
                   Çalışma Geçmişi ve Oturum Kayıtları
                 </h2>
               </div>
-              <span className="text-xs font-bold text-[#7E8D9F]">
+              <span className="text-xs font-medium text-[#86868B]">
                 {filteredSessions.length} Kayıt
               </span>
             </div>
 
             {filteredSessions.length === 0 ? (
               <div className="p-12 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-[#F7F4EE] border border-[#DFD9CC] text-[#7E8D9F] flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#F5F5F7] border border-black/[0.06] text-[#86868B] flex items-center justify-center mx-auto mb-3">
                   <Clock className="w-6 h-6" />
                 </div>
-                <h3 className="text-sm font-extrabold text-[#1B2A4A]">Kayıt Bulunamadı</h3>
-                <p className="text-xs text-[#7E8D9F] mt-1 max-w-sm mx-auto">
+                <h3 className="text-sm font-semibold text-[#1D1D1F]">Kayıt Bulunamadı</h3>
+                <p className="text-xs text-[#86868B] mt-1 max-w-sm mx-auto">
                   Seçilen filtre kriterlerine uygun çalışma kaydı bulunmuyor. Yeni bir çalışma başlatabilir veya manuel giriş ekleyebilirsiniz.
                 </p>
                 <button
                   onClick={() => setIsManualModalOpen(true)}
-                  className="mt-4 px-4 py-2 bg-[#1B2A4A] text-white text-xs font-bold rounded-xl inline-flex items-center gap-1.5"
+                  className="apple-btn-primary mt-4 px-4 py-2 text-xs font-medium rounded-full inline-flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5 text-[#D97736]" />
+                  <Plus className="w-3.5 h-3.5" />
                   <span>Manuel Giriş Ekle</span>
                 </button>
               </div>
             ) : (
-              <div className="divide-y divide-[#DFD9CC]">
+              <div className="divide-y divide-black/[0.06]">
                 {filteredSessions.map((session) => {
                   const hours = Math.floor((session.duration_minutes || 0) / 60);
                   const mins = (session.duration_minutes || 0) % 60;
@@ -454,25 +448,25 @@ export const StudyLog: React.FC = () => {
                   return (
                     <div
                       key={session.id}
-                      className="p-4 sm:px-6 hover:bg-[#F7F4EE]/50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      className="p-4 sm:px-6 hover:bg-[#F5F5F7]/50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                     >
                       <div className="flex items-start sm:items-center gap-3.5">
                         {/* Subject Badge */}
                         <span
-                          className={`px-2.5 py-1 rounded-xl text-xs font-extrabold border ${subjectStyle} whitespace-nowrap`}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border ${subjectStyle} whitespace-nowrap`}
                         >
                           {session.subject}
                         </span>
 
                         <div>
                           <div className="flex items-center gap-2">
-                            <h4 className="text-xs sm:text-sm font-bold text-[#1B2A4A]">
+                            <h4 className="text-xs sm:text-sm font-semibold text-[#1D1D1F]">
                               {session.topic || 'Genel Konu Tekrarı & Soru Çözümü'}
                             </h4>
                           </div>
-                          <div className="flex items-center gap-3 mt-1 text-[11px] text-[#7E8D9F]">
+                          <div className="flex items-center gap-3 mt-1 text-[11px] text-[#86868B]">
                             <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-[#7E8D9F]" />
+                              <Calendar className="w-3 h-3" />
                               {formatDateTR(session.start_time)}
                             </span>
                           </div>
@@ -480,13 +474,13 @@ export const StudyLog: React.FC = () => {
                       </div>
 
                       {/* Right side: Duration, Source & Actions */}
-                      <div className="flex items-center justify-between sm:justify-end gap-3.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#DFD9CC]/50">
+                      <div className="flex items-center justify-between sm:justify-end gap-3.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-black/[0.04]">
                         {/* Source Badge */}
                         <span
-                          className={`px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold flex items-center gap-1 ${
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1 ${
                             session.source === 'timer'
-                              ? 'bg-[#2E6B4F]/10 text-[#2E6B4F] border border-[#2E6B4F]/20'
-                              : 'bg-[#255A8A]/10 text-[#255A8A] border border-[#255A8A]/20'
+                              ? 'bg-[#34C759]/10 text-[#34C759] border border-[#34C759]/20'
+                              : 'bg-[#0071E3]/10 text-[#0071E3] border border-[#0071E3]/20'
                           }`}
                         >
                           {session.source === 'timer' ? (
@@ -502,10 +496,10 @@ export const StudyLog: React.FC = () => {
 
                         {/* Duration Badge */}
                         <div className="text-right min-w-[70px]">
-                          <span className="text-xs sm:text-sm font-black text-[#1B2A4A] block">
+                          <span className="text-xs sm:text-sm font-bold text-[#1D1D1F] block">
                             {formattedDuration}
                           </span>
-                          <span className="text-[10px] text-[#7E8D9F]">
+                          <span className="text-[10px] text-[#86868B]">
                             {session.duration_minutes} dk
                           </span>
                         </div>
@@ -513,7 +507,7 @@ export const StudyLog: React.FC = () => {
                         {/* Delete button */}
                         <button
                           onClick={(e) => handleDeleteSession(session.id, e)}
-                          className="p-2 rounded-lg text-[#7E8D9F] hover:text-[#C0392B] hover:bg-[#C0392B]/10 transition-colors"
+                          className="p-2 rounded-full text-[#86868B] hover:text-[#FF3B30] hover:bg-[#FF3B30]/10 transition-colors cursor-pointer"
                           title="Kayıt Sil"
                         >
                           <Trash2 className="w-4 h-4" />

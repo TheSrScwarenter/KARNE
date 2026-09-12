@@ -62,7 +62,7 @@ export const StudentsManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Invite code state
-  const [inviteCode, setInviteCode] = useState('YKS-KOC-8429');
+  const [inviteCode, setInviteCode] = useState(user?.coach_code || 'SELIN-KOC');
   const [copied, setCopied] = useState(false);
 
   // Modals state
@@ -100,7 +100,11 @@ export const StudentsManagement: React.FC = () => {
   const fetchStudents = async () => {
     setLoading(true);
     try {
-      const list = await coachService.getStudents();
+      const list = await coachService.getStudents(
+        user?.id,
+        user?.coach_code,
+        user?.role === 'admin'
+      );
       setStudents(list);
     } catch (e) {
       console.error('Students load error:', e);
@@ -110,8 +114,11 @@ export const StudentsManagement: React.FC = () => {
   };
 
   useEffect(() => {
+    if (user?.coach_code) {
+      setInviteCode(user.coach_code);
+    }
     fetchStudents();
-  }, []);
+  }, [user]);
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(inviteCode);
@@ -175,7 +182,12 @@ export const StudentsManagement: React.FC = () => {
   const openStudentDetail = async (st: CoachStudent) => {
     setSelectedStudent(st);
     try {
-      const data = await coachService.getStudentDetailedData(st.id);
+      const data = await coachService.getStudentDetailedData(
+        st.id,
+        user?.id,
+        user?.coach_code,
+        user?.role === 'admin'
+      );
       setStudentDetailedData(data);
       const bList = await booksService.getBooks(st.id);
       setStudentBooks(bList);
@@ -457,7 +469,7 @@ export const StudentsManagement: React.FC = () => {
                       <div
                         className={`w-11 h-11 rounded-2xl ${st.avatarColor} text-white font-extrabold text-base flex items-center justify-center shadow-xs`}
                       >
-                        {st.name.charAt(0)}
+                        {st.name ? st.name.charAt(0).toUpperCase() : 'Ö'}
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
@@ -619,7 +631,7 @@ export const StudentsManagement: React.FC = () => {
                 <div
                   className={`w-12 h-12 rounded-2xl ${selectedStudent.avatarColor} text-white font-black text-xl flex items-center justify-center shadow-xs`}
                 >
-                  {selectedStudent.name.charAt(0)}
+                  {selectedStudent.name ? selectedStudent.name.charAt(0).toUpperCase() : 'Ö'}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -1097,7 +1109,7 @@ export const StudentsManagement: React.FC = () => {
                         >
                           <div className="flex items-center gap-2.5">
                             <span className="w-8 h-8 rounded-lg bg-[#255A8A]/10 text-[#255A8A] flex items-center justify-center font-bold">
-                              {item.subject.charAt(0)}
+                              {item.subject ? item.subject.charAt(0).toUpperCase() : 'D'}
                             </span>
                             <div>
                               <p className="font-bold text-[#1B2A4A]">{item.subject} • {item.topic}</p>
@@ -1703,7 +1715,12 @@ export const StudentsManagement: React.FC = () => {
             try {
               await examsService.deleteExam(id);
               if (selectedStudent) {
-                const refreshedData = await coachService.getStudentDetailedData(selectedStudent.id);
+                const refreshedData = await coachService.getStudentDetailedData(
+                  selectedStudent.id,
+                  user?.id,
+                  user?.coach_code,
+                  user?.role === 'admin'
+                );
                 setStudentDetailedData(refreshedData);
               }
               setSelectedExamForCoachModal(null);

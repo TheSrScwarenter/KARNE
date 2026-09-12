@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Plus,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { ExamType } from '../types';
 import { examsService } from '../lib/examsService';
+import { YKS_CURRICULUM } from '../lib/topicMasteryService';
 
 interface SubjectRowInput {
   subject: string;
@@ -89,6 +90,26 @@ export const AddExamModal: React.FC<AddExamModalProps> = ({
   const [saving, setSaving] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Selectable subject list for topic wrong answers (expands Fen to Fizik/Kimya/Biyo and Sosyal to Tarih/Coğrafya/Felsefe/Din)
+  const selectableTopicSubjects = useMemo(() => {
+    const list: string[] = [];
+    subjects.forEach((s) => {
+      list.push(s.subject);
+      if (s.subject.toLowerCase().includes('fen')) {
+        if (!list.includes('Fizik')) list.push('Fizik');
+        if (!list.includes('Kimya')) list.push('Kimya');
+        if (!list.includes('Biyoloji')) list.push('Biyoloji');
+      }
+      if (s.subject.toLowerCase().includes('sosyal')) {
+        if (!list.includes('Tarih')) list.push('Tarih');
+        if (!list.includes('Coğrafya')) list.push('Coğrafya');
+        if (!list.includes('Felsefe')) list.push('Felsefe');
+        if (!list.includes('Din Kültürü')) list.push('Din Kültürü');
+      }
+    });
+    return Array.from(new Set(list));
+  }, [subjects]);
+
   if (!isOpen) return null;
 
   // Change exam type and load template
@@ -137,10 +158,47 @@ export const AddExamModal: React.FC<AddExamModalProps> = ({
     setSubjects((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Helper to find curriculum topics for a subject
+  const getCurriculumTopicsForSubject = (subjName: string): string[] => {
+    const sLower = subjName.toLowerCase();
+    const matched = YKS_CURRICULUM.filter((t) => {
+      const tSubj = t.subject.toLowerCase();
+
+      // If user selected Fen Bilimleri -> include Fizik, Kimya, Biyoloji
+      if (sLower.includes('fen') && (tSubj.includes('fiz') || tSubj.includes('kim') || tSubj.includes('biyo'))) {
+        return true;
+      }
+
+      // If user selected Sosyal Bilgiler / Sosyal Bilimler -> include Tarih, Coğrafya, Felsefe, Din
+      if (sLower.includes('sosyal') && (tSubj.includes('tarih') || tSubj.includes('coğ') || tSubj.includes('fel') || tSubj.includes('din'))) {
+        return true;
+      }
+
+      if (sLower.includes('mat') && tSubj.includes('mat')) return true;
+      if (sLower.includes('türk') && tSubj.includes('türk')) return true;
+      if (sLower.includes('edeb') && tSubj.includes('edeb')) return true;
+      if (sLower.includes('fiz') && tSubj.includes('fiz')) return true;
+      if (sLower.includes('kim') && tSubj.includes('kim')) return true;
+      if (sLower.includes('biyo') && tSubj.includes('biyo')) return true;
+      if (sLower.includes('geo') && tSubj.includes('geo')) return true;
+      if (sLower.includes('tarih') && tSubj.includes('tarih')) return true;
+      if (sLower.includes('coğ') && tSubj.includes('coğ')) return true;
+      if (sLower.includes('fel') && tSubj.includes('fel')) return true;
+      if (sLower.includes('din') && tSubj.includes('din')) return true;
+      return tSubj.includes(sLower) || sLower.includes(tSubj);
+    });
+
+    return Array.from(new Set(matched.map((m) => m.topic_name)));
+  };
+
   // Add topic row
   const addTopicRow = () => {
     const defaultSubj = subjects[0]?.subject || 'Matematik';
-    setTopics((prev) => [...prev, { subject: defaultSubj, topic: '', wrong_count: 1 }]);
+    const subTopics = getCurriculumTopicsForSubject(defaultSubj);
+    setTopics((prev) => [
+      ...prev,
+      { subject: defaultSubj, topic: subTopics[0] || '', wrong_count: 1 },
+    ]);
   };
 
   // Update topic row
@@ -492,58 +550,105 @@ export const AddExamModal: React.FC<AddExamModalProps> = ({
 
             {showTopicDetails && (
               <div className="p-4 space-y-3 border-t border-[#DFD9CC]">
-                <p className="text-[11px] text-[#7E8D9F]">
-                  Bu denemede yanlış yaptığınız spesifik konuları ve yanlış sayılarını girin:
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] text-[#7E8D9F]">
+                    Yanlış yaptığınız dersi ve konuyu listeden seçin (isteğe bağlıdır):
+                  </p>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#255A8A]/10 text-[#255A8A]">
+                    MEB / ÖSYM Müfredat Listesi
+                  </span>
+                </div>
 
-                {topics.map((tRow, tIdx) => (
-                  <div key={tIdx} className="flex items-center gap-2">
-                    <select
-                      value={tRow.subject}
-                      onChange={(e) => updateTopicRow(tIdx, 'subject', e.target.value)}
-                      className="w-36 py-1.5 px-2 bg-[#F7F4EE] border border-[#DFD9CC] rounded-lg text-xs font-bold text-[#1B2A4A]"
-                    >
-                      {subjects.map((s, i) => (
-                        <option key={i} value={s.subject}>
-                          {s.subject}
-                        </option>
-                      ))}
-                    </select>
+                {topics.map((tRow, tIdx) => {
+                  const availableTopics = getCurriculumTopicsForSubject(tRow.subject);
+                  const isCustomTopic = tRow.topic && !availableTopics.includes(tRow.topic);
 
-                    <input
-                      type="text"
-                      value={tRow.topic}
-                      onChange={(e) => updateTopicRow(tIdx, 'topic', e.target.value)}
-                      placeholder="Örn: Türev - Ekstremum Noktalar veya Paragraf"
-                      className="flex-1 py-1.5 px-3 bg-[#F7F4EE] border border-[#DFD9CC] rounded-lg text-xs text-[#1B2A4A]"
-                    />
+                  return (
+                    <div key={tIdx} className="p-2.5 rounded-xl bg-[#FAF8F5] border border-[#DFD9CC] space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        {/* Subject selector */}
+                        <select
+                          value={tRow.subject}
+                          onChange={(e) => {
+                            const newSubj = e.target.value;
+                            const newTopics = getCurriculumTopicsForSubject(newSubj);
+                            updateTopicRow(tIdx, 'subject', newSubj);
+                            updateTopicRow(tIdx, 'topic', newTopics[0] || '');
+                          }}
+                          className="w-full sm:w-40 py-1.5 px-2 bg-white border border-[#DFD9CC] rounded-lg text-xs font-bold text-[#1B2A4A]"
+                        >
+                          {selectableTopicSubjects.map((subjName, i) => (
+                            <option key={i} value={subjName}>
+                              {subjName}
+                            </option>
+                          ))}
+                        </select>
 
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={tRow.wrong_count}
-                        onChange={(e) => updateTopicRow(tIdx, 'wrong_count', e.target.value)}
-                        className="w-14 py-1.5 px-1 bg-[#F7F4EE] border border-[#DFD9CC] rounded-lg text-xs font-bold text-center text-[#C0392B]"
-                      />
-                      <span className="text-[10px] text-[#7E8D9F] font-bold">yanlış</span>
+                        {/* Topic selector (dropdown with selectable curriculum topics) */}
+                        <select
+                          value={isCustomTopic ? '__custom__' : tRow.topic}
+                          onChange={(e) => {
+                            if (e.target.value === '__custom__') {
+                              updateTopicRow(tIdx, 'topic', '');
+                            } else {
+                              updateTopicRow(tIdx, 'topic', e.target.value);
+                            }
+                          }}
+                          className="flex-1 py-1.5 px-2.5 bg-white border border-[#DFD9CC] rounded-lg text-xs font-medium text-[#1B2A4A]"
+                        >
+                          <option value="">-- Konu Seçiniz --</option>
+                          {availableTopics.map((topName, i) => (
+                            <option key={i} value={topName}>
+                              {topName}
+                            </option>
+                          ))}
+                          <option value="__custom__">✏️ Listede Yok (Kendim Yazacağım)</option>
+                        </select>
+
+                        {/* Wrong question count */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input
+                            type="number"
+                            min={1}
+                            max={40}
+                            value={tRow.wrong_count}
+                            onChange={(e) => updateTopicRow(tIdx, 'wrong_count', e.target.value)}
+                            className="w-12 py-1.5 px-1 bg-white border border-[#DFD9CC] rounded-lg text-xs font-bold text-center text-[#C0392B]"
+                          />
+                          <span className="text-[10px] text-[#7E8D9F] font-bold">yanlış</span>
+                        </div>
+
+                        {/* Remove button */}
+                        <button
+                          type="button"
+                          onClick={() => removeTopicRow(tIdx)}
+                          className="p-1.5 text-[#7E8D9F] hover:text-[#C0392B] rounded-lg transition-colors cursor-pointer"
+                          title="Bu konuyu kaldır"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* If custom topic selected, show text field */}
+                      {(isCustomTopic || tRow.topic === '') && (
+                        <div className="pl-1 pt-1 flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={tRow.topic}
+                            onChange={(e) => updateTopicRow(tIdx, 'topic', e.target.value)}
+                            placeholder="Özel konu adı giriniz (örn: Özel Problem Tipi)..."
+                            className="flex-1 py-1 px-2.5 bg-white border border-dashed border-[#255A8A]/40 rounded-lg text-xs text-[#1B2A4A] placeholder:text-gray-400"
+                          />
+                        </div>
+                      )}
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => removeTopicRow(tIdx)}
-                      className="p-1 text-[#7E8D9F] hover:text-[#C0392B]"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
 
                 <button
                   type="button"
                   onClick={addTopicRow}
-                  className="px-3 py-1.5 text-xs font-bold text-[#255A8A] bg-[#255A8A]/10 hover:bg-[#255A8A]/20 rounded-xl transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 text-xs font-bold text-[#255A8A] bg-[#255A8A]/10 hover:bg-[#255A8A]/20 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Başka Konu Yanlışı Ekle</span>

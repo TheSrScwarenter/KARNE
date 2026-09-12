@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Flame, Clock, Sparkles } from 'lucide-react';
+import { Flame, Clock, Sparkles } from 'lucide-react';
 import { DayStudyData } from '../lib/studySessionsService';
 
 interface StudyHeatmapProps {
@@ -12,7 +12,6 @@ export const StudyHeatmap: React.FC<StudyHeatmapProps> = ({ days }) => {
   const [hoveredDay, setHoveredDay] = useState<DayStudyData | null>(null);
 
   // Group 84 days into 12 weeks (each column has 7 days)
-  // Let's organize days by columns (weeks)
   const weeks: DayStudyData[][] = [];
   for (let i = 0; i < days.length; i += 7) {
     weeks.push(days.slice(i, i + 7));
@@ -22,15 +21,22 @@ export const StudyHeatmap: React.FC<StudyHeatmapProps> = ({ days }) => {
   const totalMinutes12Weeks = days.reduce((sum, d) => sum + d.totalMinutes, 0);
   const totalHours12Weeks = (totalMinutes12Weeks / 60).toFixed(1);
   const activeDaysCount = days.filter((d) => d.totalMinutes > 0).length;
-  const maxMinutesInDay = Math.max(...days.map((d) => d.totalMinutes), 0);
 
   // Color intensity calculator based on study duration
   const getCellColor = (minutes: number) => {
-    if (minutes === 0) return 'bg-[#EFEBE0] border-[#DFD9CC] hover:border-[#1B2A4A]/40';
-    if (minutes <= 60) return 'bg-[#2E6B4F]/20 border-[#2E6B4F]/30 hover:brightness-95';
-    if (minutes <= 150) return 'bg-[#2E6B4F]/45 border-[#2E6B4F]/50 hover:brightness-95';
-    if (minutes <= 240) return 'bg-[#2E6B4F]/75 border-[#2E6B4F]/80 hover:brightness-95';
-    return 'bg-[#2E6B4F] border-[#2E6B4F] hover:brightness-110';
+    if (minutes === 0) {
+      return 'bg-[#F5F5F7] border-black/[0.04] hover:border-black/[0.15]';
+    }
+    if (minutes <= 60) {
+      return 'bg-[#34C759]/25 border-[#34C759]/30 hover:brightness-105';
+    }
+    if (minutes <= 150) {
+      return 'bg-[#34C759]/50 border-[#34C759]/60 hover:brightness-105';
+    }
+    if (minutes <= 240) {
+      return 'bg-[#34C759]/75 border-[#34C759]/85 hover:brightness-105';
+    }
+    return 'bg-[#34C759] border-[#34C759] hover:brightness-110';
   };
 
   const formatDateTR = (dateStr: string) => {
@@ -48,19 +54,19 @@ export const StudyHeatmap: React.FC<StudyHeatmapProps> = ({ days }) => {
   return (
     <div
       id="study-heatmap-card"
-      className="bento-card p-5 sm:p-6 bg-white border-[#DFD9CC] relative"
+      className="bento-card p-5 sm:p-6 bg-white border border-black/[0.06] relative"
     >
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#2E6B4F]/10 text-[#2E6B4F] flex items-center justify-center font-bold">
+          <div className="w-8 h-8 rounded-xl bg-[#34C759]/10 text-[#34C759] flex items-center justify-center font-bold">
             <Flame className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-xs font-extrabold text-[#1B2A4A] tracking-tight uppercase">
-              12 Haftalık Çalışma Isı Haritası (Study Heatmap)
+            <h3 className="text-xs font-bold text-[#1D1D1F] tracking-tight uppercase">
+              12 Haftalık Çalışma Isı Haritası
             </h3>
-            <p className="text-[11px] text-[#7E8D9F]">
+            <p className="text-[11px] text-[#86868B]">
               Son 84 günün ders çalışma yoğunluğu ve istikrar grafiği
             </p>
           </div>
@@ -68,13 +74,13 @@ export const StudyHeatmap: React.FC<StudyHeatmapProps> = ({ days }) => {
 
         {/* Aggregate metric chips */}
         <div className="flex items-center gap-2">
-          <span className="px-3 py-1 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs font-bold text-[#1B2A4A] flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-[#D97736]" />
-            Toplam: <strong>{totalHours12Weeks} Saat</strong>
+          <span className="px-3 py-1 bg-[#F5F5F7] border border-black/[0.06] rounded-full text-xs font-medium text-[#1D1D1F] flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-[#0071E3]" />
+            Toplam: <strong className="font-semibold">{totalHours12Weeks} Saat</strong>
           </span>
-          <span className="px-3 py-1 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs font-bold text-[#2E6B4F] flex items-center gap-1.5">
+          <span className="px-3 py-1 bg-[#F5F5F7] border border-black/[0.06] rounded-full text-xs font-medium text-[#34C759] flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
-            Aktif Gün: <strong>{activeDaysCount} / 84</strong>
+            Aktif Gün: <strong className="font-semibold">{activeDaysCount} / 84</strong>
           </span>
         </div>
       </div>
@@ -84,7 +90,7 @@ export const StudyHeatmap: React.FC<StudyHeatmapProps> = ({ days }) => {
         <div className="inline-block min-w-full">
           <div className="flex gap-2">
             {/* Day name labels column */}
-            <div className="flex flex-col gap-1.5 pt-6 text-[10px] font-bold text-[#7E8D9F] select-none pr-1">
+            <div className="flex flex-col gap-1.5 pt-6 text-[10px] font-medium text-[#86868B] select-none pr-1">
               {DAY_NAMES.map((name, idx) => (
                 <div key={idx} className="h-4 sm:h-5 flex items-center justify-end">
                   {idx % 2 === 0 ? name : ''}
@@ -95,7 +101,6 @@ export const StudyHeatmap: React.FC<StudyHeatmapProps> = ({ days }) => {
             {/* Weeks Columns */}
             <div className="flex-1 flex gap-1.5">
               {weeks.map((week, weekIdx) => {
-                // Determine label for top (Month change)
                 const firstDayInWeek = week[0];
                 const dateParts = firstDayInWeek.date.split('-');
                 const dayNum = parseInt(dateParts[2], 10);
@@ -107,7 +112,7 @@ export const StudyHeatmap: React.FC<StudyHeatmapProps> = ({ days }) => {
                 return (
                   <div key={weekIdx} className="flex-1 flex flex-col gap-1.5 min-w-[20px]">
                     {/* Month Label Header */}
-                    <div className="h-4 text-[10px] font-bold text-[#7E8D9F] truncate text-center">
+                    <div className="h-4 text-[10px] font-medium text-[#86868B] truncate text-center">
                       {isMonthStart ? monthLabel : ''}
                     </div>
 
@@ -131,42 +136,42 @@ export const StudyHeatmap: React.FC<StudyHeatmapProps> = ({ days }) => {
       </div>
 
       {/* Hover Info Tooltip Banner & Legend Footer */}
-      <div className="mt-4 pt-3 border-t border-[#DFD9CC] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+      <div className="mt-4 pt-3 border-t border-black/[0.06] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
         {/* Dynamic Tooltip */}
         <div className="min-h-[22px] flex items-center">
           {hoveredDay ? (
-            <div className="flex items-center gap-2 text-xs font-bold text-[#1B2A4A]">
-              <span className="text-[#D97736]">{formatDateTR(hoveredDay.date)}:</span>
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#1D1D1F]">
+              <span className="text-[#0071E3]">{formatDateTR(hoveredDay.date)}:</span>
               {hoveredDay.totalMinutes > 0 ? (
                 <span>
                   {Math.floor(hoveredDay.totalMinutes / 60)} sa {hoveredDay.totalMinutes % 60} dk
                   ({hoveredDay.sessionCount} oturum)
                   {Object.keys(hoveredDay.subjectBreakdown).length > 0 && (
-                    <span className="text-[#4A5B78] font-normal ml-1">
+                    <span className="text-[#86868B] font-normal ml-1">
                       — {Object.entries(hoveredDay.subjectBreakdown).map(([s, m]) => `${s}: ${m}dk`).join(', ')}
                     </span>
                   )}
                 </span>
               ) : (
-                <span className="text-[#7E8D9F] font-medium">Bu gün çalışma kaydedilmedi</span>
+                <span className="text-[#86868B] font-normal">Bu gün çalışma kaydedilmedi</span>
               )}
             </div>
           ) : (
-            <span className="text-[#7E8D9F] text-[11px]">
+            <span className="text-[#86868B] text-[11px]">
               Detayları görmek için gün kutucuklarının üzerine gelin.
             </span>
           )}
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-2 text-[11px] text-[#7E8D9F] font-bold self-end sm:self-auto">
+        <div className="flex items-center gap-2 text-[11px] text-[#86868B] font-medium self-end sm:self-auto">
           <span>Az</span>
           <div className="flex items-center gap-1">
-            <span className="w-3.5 h-3.5 rounded-xs bg-[#EFEBE0] border border-[#DFD9CC]" title="0 dk" />
-            <span className="w-3.5 h-3.5 rounded-xs bg-[#2E6B4F]/20 border border-[#2E6B4F]/30" title="1-60 dk" />
-            <span className="w-3.5 h-3.5 rounded-xs bg-[#2E6B4F]/45 border border-[#2E6B4F]/50" title="61-150 dk" />
-            <span className="w-3.5 h-3.5 rounded-xs bg-[#2E6B4F]/75 border border-[#2E6B4F]/80" title="151-240 dk" />
-            <span className="w-3.5 h-3.5 rounded-xs bg-[#2E6B4F] border border-[#2E6B4F]" title="240+ dk" />
+            <span className="w-3.5 h-3.5 rounded-xs bg-[#F5F5F7] border border-black/[0.04]" title="0 dk" />
+            <span className="w-3.5 h-3.5 rounded-xs bg-[#34C759]/25 border border-[#34C759]/30" title="1-60 dk" />
+            <span className="w-3.5 h-3.5 rounded-xs bg-[#34C759]/50 border border-[#34C759]/60" title="61-150 dk" />
+            <span className="w-3.5 h-3.5 rounded-xs bg-[#34C759]/75 border border-[#34C759]/85" title="151-240 dk" />
+            <span className="w-3.5 h-3.5 rounded-xs bg-[#34C759] border border-[#34C759]" title="240+ dk" />
           </div>
           <span>Çok</span>
         </div>

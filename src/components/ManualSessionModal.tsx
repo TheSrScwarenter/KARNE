@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Plus,
 } from 'lucide-react';
 import { studySessionsService } from '../lib/studySessionsService';
 
@@ -70,9 +69,8 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
 
     setSaving(true);
     try {
-      // Build start_time and end_time based on date
       const startTime = new Date(date);
-      startTime.setHours(14, 0, 0, 0); // Default to midday
+      startTime.setHours(14, 0, 0, 0);
       const endTime = new Date(startTime.getTime() + totalMinutes * 60 * 1000);
 
       await studySessionsService.addSession({
@@ -85,7 +83,6 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
         source: 'manual',
       });
 
-      // Reset and close
       setTopic('');
       setHours(1);
       setMinutes(30);
@@ -102,27 +99,27 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
   return (
     <div
       id="manual-session-modal"
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
     >
-      <div className="bg-white border border-[#DFD9CC] rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl my-8 transition-all">
+      <div className="bento-card bg-white border border-black/[0.08] rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl my-8 transition-all">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#DFD9CC] bg-[#F7F4EE] flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-black/[0.06] bg-[#F5F5F7] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#2E6B4F]/10 text-[#2E6B4F] flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center font-bold">
               <Clock className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-[#1B2A4A] tracking-tight">
+              <h2 className="text-base font-bold text-[#1D1D1F] tracking-tight">
                 Manuel Çalışma Kaydı Ekle
               </h2>
-              <p className="text-[11px] text-[#4A5B78]">
+              <p className="text-[11px] text-[#86868B]">
                 Geçmişte yaptığınız veya kronometre kullanmadığınız çalışmaları ekleyin
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full hover:bg-[#EFEBE0] flex items-center justify-center text-[#7E8D9F] hover:text-[#1B2A4A] transition-colors"
+            className="w-7 h-7 rounded-full bg-black/[0.05] hover:bg-black/[0.1] flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -131,22 +128,22 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-[#C0392B]/10 border border-[#C0392B]/20 text-[#C0392B] text-xs font-semibold flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div className="p-3 rounded-2xl bg-[#FF3B30]/10 border border-[#FF3B30]/20 text-[#FF3B30] text-xs font-medium flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {/* Subject */}
           <div>
-            <label className="block text-xs font-bold text-[#1B2A4A] mb-1 flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-[#D97736]" />
-              Ders <span className="text-[#C0392B]">*</span>
+            <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5 flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-[#0071E3]" />
+              Ders <span className="text-[#FF3B30]">*</span>
             </label>
             <select
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="w-full p-2.5 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs font-bold text-[#1B2A4A] focus:outline-none focus:border-[#1B2A4A]"
+              className="apple-input w-full"
             >
               {YKS_SUBJECTS.map((subj) => (
                 <option key={subj} value={subj}>
@@ -158,8 +155,8 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
 
           {/* Topic */}
           <div>
-            <label className="block text-xs font-bold text-[#1B2A4A] mb-1 flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-[#255A8A]" />
+            <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-[#34C759]" />
               Konu / Detay (Opsiyonel)
             </label>
             <input
@@ -167,33 +164,33 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="Örn: 2. Dereceden Denklemler & Karmaşık Sayılar"
-              className="w-full p-2.5 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs text-[#1B2A4A] focus:outline-none focus:border-[#1B2A4A] placeholder:text-[#7E8D9F]"
+              className="apple-input w-full"
             />
           </div>
 
           {/* Date */}
           <div>
-            <label className="block text-xs font-bold text-[#1B2A4A] mb-1 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-[#4A3E72]" />
-              Çalışma Tarihi <span className="text-[#C0392B]">*</span>
+            <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-[#AF52DE]" />
+              Çalışma Tarihi <span className="text-[#FF3B30]">*</span>
             </label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
               max={new Date().toISOString().split('T')[0]}
-              className="w-full p-2.5 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs font-bold text-[#1B2A4A] focus:outline-none focus:border-[#1B2A4A]"
+              className="apple-input w-full"
             />
           </div>
 
           {/* Duration: Hours and Minutes */}
           <div>
-            <label className="block text-xs font-bold text-[#1B2A4A] mb-1 flex items-center justify-between">
+            <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-[#2E6B4F]" />
-                Çalışma Süresi <span className="text-[#C0392B]">*</span>
+                <Clock className="w-3.5 h-3.5 text-[#0071E3]" />
+                Çalışma Süresi <span className="text-[#FF3B30]">*</span>
               </span>
-              <span className="text-[11px] font-mono text-[#7E8D9F] font-bold">
+              <span className="text-[11px] font-medium text-[#86868B]">
                 Toplam: {hours * 60 + minutes} Dakika ({((hours * 60 + minutes) / 60).toFixed(1)} Saat)
               </span>
             </label>
@@ -206,9 +203,9 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
                     max={12}
                     value={hours}
                     onChange={(e) => setHours(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full p-2.5 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs font-bold text-[#1B2A4A] focus:outline-none focus:border-[#1B2A4A] text-center"
+                    className="apple-input w-full text-center"
                   />
-                  <span className="text-xs text-[#7E8D9F] font-bold">Saat</span>
+                  <span className="text-xs text-[#86868B] font-medium">Saat</span>
                 </div>
               </div>
               <div>
@@ -220,9 +217,9 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
                     step={5}
                     value={minutes}
                     onChange={(e) => setMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
-                    className="w-full p-2.5 bg-[#F7F4EE] border border-[#DFD9CC] rounded-xl text-xs font-bold text-[#1B2A4A] focus:outline-none focus:border-[#1B2A4A] text-center"
+                    className="apple-input w-full text-center"
                   />
-                  <span className="text-xs text-[#7E8D9F] font-bold">Dakika</span>
+                  <span className="text-xs text-[#86868B] font-medium">Dakika</span>
                 </div>
               </div>
             </div>
@@ -244,7 +241,7 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
                     setHours(p.h);
                     setMinutes(p.m);
                   }}
-                  className="px-2.5 py-1 bg-[#EFEBE0] hover:bg-[#DFD9CC] text-[#1B2A4A] text-[11px] font-bold rounded-lg border border-[#DFD9CC] transition-colors"
+                  className="px-2.5 py-1 bg-[#F5F5F7] hover:bg-black/[0.08] text-[#1D1D1F] text-[11px] font-medium rounded-full border border-black/[0.04] transition-colors cursor-pointer"
                 >
                   {p.label}
                 </button>
@@ -253,11 +250,11 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#DFD9CC]">
+          <div className="pt-3 flex items-center justify-end gap-3 border-t border-black/[0.06]">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-[#4A5B78] hover:text-[#1B2A4A] rounded-xl transition-colors"
+              className="apple-btn-secondary px-4 py-2 text-xs font-medium rounded-full cursor-pointer"
             >
               İptal
             </button>
@@ -265,16 +262,16 @@ export const ManualSessionModal: React.FC<ManualSessionModalProps> = ({
               type="submit"
               id="btn-save-manual-session"
               disabled={saving}
-              className="py-2.5 px-5 bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 text-[#F7F4EE] text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-2 disabled:opacity-50"
+              className="apple-btn-primary py-2 px-5 text-xs font-medium rounded-full inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {saving ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-[#D97736]" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Kaydediliyor...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4 text-[#D97736]" />
+                  <CheckCircle2 className="w-4 h-4" />
                   <span>Geçmiş Kaydı Ekle</span>
                 </>
               )}

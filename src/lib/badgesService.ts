@@ -11,6 +11,7 @@ import { booksService } from './booksService';
 import { examsService } from './examsService';
 import { wrongQuestionsService } from './wrongQuestionsService';
 import { cloudStorage } from './cloudStorage';
+import { xpSettingsService } from './xpSettingsService';
 
 const BADGES_CATALOG: Badge[] = [
   // 1. Streak (Seri) Rozetleri
@@ -603,16 +604,36 @@ class BadgesService {
         ? Math.min(100, Math.round((weekStats.totalMinutes / weeklyTargetMinutes) * 100))
         : 0;
 
-    // Total XP from unlocked badges + base XP from study hours & streak
-    const badgeXp = userBadges
-      .filter((ub) => ub.is_unlocked)
-      .reduce((acc, ub) => acc + (ub.badge.xp_points || 50), 0);
+    // Load dynamic system XP settings
+    const xpSettings = xpSettingsService.getXPSettings();
 
-    const studyHoursXp = totalStudyHours * 10;
-    const streakXp = streak.longest_streak * 20;
-    const totalXp = badgeXp + studyHoursXp + streakXp;
+    // Check if student's XP was reset by admin
+    const resetRecords = xpSettingsService.getResetRecords();
+    const isReset = Boolean(resetRecords[studentId] || resetRecords['ALL_STUDENTS']);
+    const resetAt = resetRecords[studentId]?.resetAt || resetRecords['ALL_STUDENTS']?.resetAt;
 
-    const unlockedCount = userBadges.filter((ub) => ub.is_unlocked).length;
+    let activeSessions = sessions;
+    if (isReset && resetAt) {
+      activeSessions = sessions.filter((s) => new Date(s.created_at || s.start_time).getTime() > new Date(resetAt).getTime());
+    }
+
+    const resetStudyMinutes = activeSessions.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
+
+    // Total XP from unlocked badges + real study minutes XP + streak bonus + focus session bonus XP
+    const badgeXp = isReset
+      ? 0
+      : userBadges
+          .filter((ub) => ub.is_unlocked)
+          .reduce((acc, ub) => acc + (ub.badge.xp_points || 50), 0);
+
+    const focusBonusKey = `user_focus_bonus_xp_${studentId}`;
+    const focusBonusXp = cloudStorage.getItem<number>(focusBonusKey, 0);
+
+    const studyMinutesXp = Math.round(resetStudyMinutes * (xpSettings.xpPerStudyMinute || 2));
+    const streakXp = (isReset ? 0 : streak.longest_streak) * (xpSettings.xpPerStreakDay || 25);
+    const totalXp = Math.max(0, badgeXp + studyMinutesXp + streakXp + focusBonusXp);
+
+    const unlockedCount = isReset ? 0 : userBadges.filter((ub) => ub.is_unlocked).length;
     const levelInfo = this.calculateLevelInfo(totalXp, unlockedCount);
 
     return {
@@ -628,6 +649,15 @@ class BadgesService {
       this_week_study_minutes: weekStats.totalMinutes,
       this_week_target_percentage: thisWeekTargetPercentage,
     };
+  }
+
+  // Add XP from completed focus sessions or special achievements
+  public async addFocusXP(studentId: string, xpAmount: number): Promise<number> {
+    const focusBonusKey = `user_focus_bonus_xp_${studentId}`;
+    const currentBonus = cloudStorage.getItem<number>(focusBonusKey, 0);
+    const updatedBonus = currentBonus + Math.max(0, Math.round(xpAmount));
+    cloudStorage.setItem(focusBonusKey, updatedBonus);
+    return updatedBonus;
   }
 
   // Force unlock/claim a badge (e.g. from UI testing or special event)

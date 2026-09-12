@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { badgesService } from '../lib/badgesService';
+import { WeeklyLeagueView } from '../components/WeeklyLeagueView';
+import { AnimatedNumber } from '../components/AnimatedNumber';
 import {
   UserBadge,
   UserProfileStats,
@@ -93,6 +95,7 @@ export const UserProfileView: React.FC = () => {
   const { user, navigate } = useAuth();
   const studentId = user?.id || 'st-demo-001';
 
+  const [profileTab, setProfileTab] = useState<'badges' | 'league'>('league');
   const [stats, setStats] = useState<UserProfileStats | null>(null);
   const [userBadges, setUserBadges] = useState<UserBadge[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -301,7 +304,7 @@ export const UserProfileView: React.FC = () => {
               </div>
             </div>
             <span className="text-xs font-black text-[#D97736] bg-[#D97736]/10 px-2.5 py-1 rounded-xl border border-[#D97736]/20">
-              {stats?.level.current_xp || 0} XP
+              <AnimatedNumber value={stats?.level.current_xp || 0} suffix=" XP" duration={1000} />
             </span>
           </div>
 
@@ -446,180 +449,218 @@ export const UserProfileView: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Başarı Rozetleri Galerisi (Achievement Badges Showcase) */}
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#DFD9CC] shadow-xs space-y-6">
-        {/* Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#DFD9CC] pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-[#D97736]/10 text-[#D97736] flex items-center justify-center">
-                <Trophy className="w-5 h-5" />
+      {/* 4. Tab Navigation: Haftalık YKS Ligi vs. Başarı Rozetleri */}
+      <div className="bg-white p-2 rounded-2xl border border-[#DFD9CC] shadow-2xs flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
+        <button
+          type="button"
+          onClick={() => setProfileTab('league')}
+          className={`flex-1 min-w-[170px] py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+            profileTab === 'league'
+              ? 'bg-[#1B2A4A] text-white shadow-xs'
+              : 'text-[#4A5B78] hover:text-[#1B2A4A] hover:bg-[#FAF8F5]'
+          }`}
+        >
+          <Trophy className="w-4 h-4 text-[#D97736]" />
+          <span>Haftalık YKS Çalışma Ligi</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setProfileTab('badges')}
+          className={`flex-1 min-w-[170px] py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+            profileTab === 'badges'
+              ? 'bg-[#1B2A4A] text-white shadow-xs'
+              : 'text-[#4A5B78] hover:text-[#1B2A4A] hover:bg-[#FAF8F5]'
+          }`}
+        >
+          <Medal className="w-4 h-4 text-[#255A8A]" />
+          <span>Başarı Rozetleri ({unlockedCount}/{totalCount})</span>
+        </button>
+      </div>
+
+      {/* 5. TAB 1: WEEKLY LEAGUE VIEW */}
+      {profileTab === 'league' && (
+        <div className="space-y-6 animate-in fade-in">
+          <WeeklyLeagueView />
+        </div>
+      )}
+
+      {/* 6. TAB 2: BAŞARI ROZETLERİ GALERİSİ */}
+      {profileTab === 'badges' && (
+        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#DFD9CC] shadow-xs space-y-6 animate-in fade-in">
+          {/* Section Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#DFD9CC] pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-[#D97736]/10 text-[#D97736] flex items-center justify-center">
+                  <Trophy className="w-5 h-5" />
+                </div>
+                <h2 className="text-xl font-black text-[#1B2A4A] tracking-tight">
+                  Başarı Rozetleri ({unlockedCount}/{totalCount})
+                </h2>
               </div>
-              <h2 className="text-xl font-black text-[#1B2A4A] tracking-tight">
-                Başarı Rozetleri ({unlockedCount}/{totalCount})
-              </h2>
+              <p className="text-xs text-[#7E8D9F] mt-1">
+                Ardışık çalışma serileri, soru bankası hedefleri ve deneme başarılarıyla kazandığınız rozetler.
+              </p>
             </div>
-            <p className="text-xs text-[#7E8D9F] mt-1">
-              Ardışık çalışma serileri, soru bankası hedefleri ve deneme başarılarıyla kazandığınız rozetler.
-            </p>
-          </div>
 
-          {/* Status Filter Toggle */}
-          <div className="flex items-center gap-1.5 p-1 bg-[#F7F4EE] rounded-2xl border border-[#DFD9CC] self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('all')}
-              className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all ${
-                statusFilter === 'all'
-                  ? 'bg-[#1B2A4A] text-white shadow-xs'
-                  : 'text-[#4A5B78] hover:text-[#1B2A4A]'
-              }`}
-            >
-              Tümü ({totalCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('unlocked')}
-              className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
-                statusFilter === 'unlocked'
-                  ? 'bg-[#2E6B4F] text-white shadow-xs'
-                  : 'text-[#4A5B78] hover:text-[#1B2A4A]'
-              }`}
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Kazanılan ({unlockedCount})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('locked')}
-              className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
-                statusFilter === 'locked'
-                  ? 'bg-[#1B2A4A] text-white shadow-xs'
-                  : 'text-[#4A5B78] hover:text-[#1B2A4A]'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Kilitli ({totalCount - unlockedCount})</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-          {[
-            { id: 'all' as BadgeCategory, label: 'Tüm Kategoriler', icon: Trophy },
-            { id: 'streak' as BadgeCategory, label: '🔥 Seri (Streak)', icon: Flame },
-            { id: 'study_time' as BadgeCategory, label: '⏱️ Odak Süresi', icon: Clock },
-            { id: 'books' as BadgeCategory, label: '📚 Kitap & Konu', icon: BookOpen },
-            { id: 'exams' as BadgeCategory, label: '📊 Denemeler', icon: BarChart3 },
-            { id: 'questions' as BadgeCategory, label: '❓ Hata Teşhisi', icon: HelpCircle },
-            { id: 'special' as BadgeCategory, label: '🎯 Özel Hedefler', icon: Target },
-          ].map((tab) => {
-            const isSelected = selectedCategory === tab.id;
-            const Icon = tab.icon;
-            return (
+            {/* Status Filter Toggle */}
+            <div className="flex items-center gap-1.5 p-1 bg-[#F7F4EE] rounded-2xl border border-[#DFD9CC] self-start sm:self-auto">
               <button
-                key={tab.id}
                 type="button"
-                onClick={() => setSelectedCategory(tab.id)}
-                className={`py-2 px-3.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 border shrink-0 ${
-                  isSelected
-                    ? 'bg-[#1B2A4A] text-white border-[#1B2A4A] shadow-xs'
-                    : 'bg-[#F7F4EE] text-[#4A5B78] border-[#DFD9CC] hover:bg-[#EFEBE0]'
+                onClick={() => setStatusFilter('all')}
+                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all ${
+                  statusFilter === 'all'
+                    ? 'bg-[#1B2A4A] text-white shadow-xs'
+                    : 'text-[#4A5B78] hover:text-[#1B2A4A]'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-[#D97736]' : 'text-[#7E8D9F]'}`} />
-                <span>{tab.label}</span>
+                Tümü ({totalCount})
               </button>
-            );
-          })}
-        </div>
-
-        {/* Badges Bento Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {filteredBadges.map((userBadge) => {
-            const { badge, is_unlocked, progress_current, progress_target } = userBadge;
-            const styles = getTierStyles(badge.tier, is_unlocked);
-            const percentage = Math.min(100, Math.round((progress_current / progress_target) * 100));
-
-            return (
-              <div
-                key={userBadge.id}
-                id={`badge-card-${badge.code}`}
-                onClick={() => setInspectBadge(userBadge)}
-                className={`p-5 rounded-3xl border transition-all cursor-pointer group hover:-translate-y-0.5 flex flex-col justify-between relative ${
-                  is_unlocked
-                    ? 'bg-white border-[#DFD9CC] shadow-xs hover:border-[#1B2A4A]'
-                    : 'bg-[#F7F4EE]/60 border-[#DFD9CC]/70 opacity-80 hover:opacity-100'
+              <button
+                type="button"
+                onClick={() => setStatusFilter('unlocked')}
+                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                  statusFilter === 'unlocked'
+                    ? 'bg-[#2E6B4F] text-white shadow-xs'
+                    : 'text-[#4A5B78] hover:text-[#1B2A4A]'
                 }`}
               >
-                <div>
-                  {/* Top Bar: Icon + Tier Pill */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div
-                      className={`w-13 h-13 rounded-2xl flex items-center justify-center border ${styles.badgeBg}`}
-                    >
-                      {renderBadgeIcon(badge.icon_name, 'w-6 h-6')}
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Kazanılan ({unlockedCount})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('locked')}
+                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                  statusFilter === 'locked'
+                    ? 'bg-[#1B2A4A] text-white shadow-xs'
+                    : 'text-[#4A5B78] hover:text-[#1B2A4A]'
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Kilitli ({totalCount - unlockedCount})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+            {[
+              { id: 'all' as BadgeCategory, label: 'Tüm Kategoriler', icon: Trophy },
+              { id: 'streak' as BadgeCategory, label: '🔥 Seri (Streak)', icon: Flame },
+              { id: 'study_time' as BadgeCategory, label: '⏱️ Odak Süresi', icon: Clock },
+              { id: 'books' as BadgeCategory, label: '📚 Kitap & Konu', icon: BookOpen },
+              { id: 'exams' as BadgeCategory, label: '📊 Denemeler', icon: BarChart3 },
+              { id: 'questions' as BadgeCategory, label: '❓ Hata Teşhisi', icon: HelpCircle },
+              { id: 'special' as BadgeCategory, label: '🎯 Özel Hedefler', icon: Target },
+            ].map((tab) => {
+              const isSelected = selectedCategory === tab.id;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(tab.id)}
+                  className={`py-2 px-3.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 border shrink-0 ${
+                    isSelected
+                      ? 'bg-[#1B2A4A] text-white border-[#1B2A4A] shadow-xs'
+                      : 'bg-[#F7F4EE] text-[#4A5B78] border-[#DFD9CC] hover:bg-[#EFEBE0]'
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-[#D97736]' : 'text-[#7E8D9F]'}`} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Badges Bento Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {filteredBadges.map((userBadge) => {
+              const { badge, is_unlocked, progress_current, progress_target } = userBadge;
+              const styles = getTierStyles(badge.tier, is_unlocked);
+              const percentage = Math.min(100, Math.round((progress_current / progress_target) * 100));
+
+              return (
+                <div
+                  key={userBadge.id}
+                  id={`badge-card-${badge.code}`}
+                  onClick={() => setInspectBadge(userBadge)}
+                  className={`p-5 rounded-3xl border transition-all cursor-pointer group hover:-translate-y-0.5 flex flex-col justify-between relative ${
+                    is_unlocked
+                      ? 'bg-white border-[#DFD9CC] shadow-xs hover:border-[#1B2A4A]'
+                      : 'bg-[#F7F4EE]/60 border-[#DFD9CC]/70 opacity-80 hover:opacity-100'
+                  }`}
+                >
+                  <div>
+                    {/* Top Bar: Icon + Tier Pill */}
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div
+                        className={`w-13 h-13 rounded-2xl flex items-center justify-center border ${styles.badgeBg}`}
+                      >
+                        {renderBadgeIcon(badge.icon_name, 'w-6 h-6')}
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${styles.pillBg}`}>
+                          {styles.tierName}
+                        </span>
+                        <span className="text-[10px] font-extrabold text-[#D97736]">
+                          +{badge.xp_points} XP
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${styles.pillBg}`}>
-                        {styles.tierName}
-                      </span>
-                      <span className="text-[10px] font-extrabold text-[#D97736]">
-                        +{badge.xp_points} XP
-                      </span>
-                    </div>
+                    {/* Title & Description */}
+                    <h3 className="text-sm font-extrabold text-[#1B2A4A] group-hover:text-[#D97736] transition-colors flex items-center gap-1.5">
+                      <span>{badge.title}</span>
+                      {is_unlocked && <CheckCircle2 className="w-3.5 h-3.5 text-[#2E6B4F] shrink-0" />}
+                    </h3>
+                    <p className="text-xs text-[#7E8D9F] mt-1 line-clamp-2 leading-relaxed">
+                      {badge.description}
+                    </p>
                   </div>
 
-                  {/* Title & Description */}
-                  <h3 className="text-sm font-extrabold text-[#1B2A4A] group-hover:text-[#D97736] transition-colors flex items-center gap-1.5">
-                    <span>{badge.title}</span>
-                    {is_unlocked && <CheckCircle2 className="w-3.5 h-3.5 text-[#2E6B4F] shrink-0" />}
-                  </h3>
-                  <p className="text-xs text-[#7E8D9F] mt-1 line-clamp-2 leading-relaxed">
-                    {badge.description}
-                  </p>
-                </div>
-
-                {/* Progress / Status Bar */}
-                <div className="mt-4 pt-3 border-t border-[#DFD9CC]/80">
-                  {is_unlocked ? (
-                    <div className="flex items-center justify-between text-xs font-bold text-[#2E6B4F]">
-                      <span className="flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Kazanıldı</span>
-                      </span>
-                      <span className="text-[10px] text-[#7E8D9F] font-medium">Rozet Aktif</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px] font-semibold text-[#7E8D9F]">
-                        <span>İlerleme: {progress_current} / {progress_target}</span>
-                        <span className="font-bold text-[#1B2A4A]">%{percentage}</span>
+                  {/* Progress / Status Bar */}
+                  <div className="mt-4 pt-3 border-t border-[#DFD9CC]/80">
+                    {is_unlocked ? (
+                      <div className="flex items-center justify-between text-xs font-bold text-[#2E6B4F]">
+                        <span className="flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Kazanıldı</span>
+                        </span>
+                        <span className="text-[10px] text-[#7E8D9F] font-medium">Rozet Aktif</span>
                       </div>
-                      <div className="w-full h-2 bg-[#E2DED4] rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-[#1B2A4A] rounded-full transition-all duration-300"
-                          style={{ width: `${percentage}%` }}
-                        />
+                    ) : (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-[#7E8D9F]">
+                          <span>İlerleme: {progress_current} / {progress_target}</span>
+                          <span className="font-bold text-[#1B2A4A]">%{percentage}</span>
+                        </div>
+                        <div className="w-full h-2 bg-[#E2DED4] rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#1B2A4A] rounded-full transition-all duration-300"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {filteredBadges.length === 0 && (
-          <div className="p-8 text-center bg-[#F7F4EE] rounded-3xl border border-[#DFD9CC]">
-            <Trophy className="w-10 h-10 text-[#7E8D9F] mx-auto mb-2 opacity-50" />
-            <p className="text-xs font-bold text-[#1B2A4A]">Seçilen filtrede rozet bulunamadı.</p>
-            <p className="text-[11px] text-[#7E8D9F] mt-0.5">Diğer filtre seçeneklerini deneyebilirsiniz.</p>
+              );
+            })}
           </div>
-        )}
-      </div>
+
+          {filteredBadges.length === 0 && (
+            <div className="p-8 text-center bg-[#F7F4EE] rounded-3xl border border-[#DFD9CC]">
+              <Trophy className="w-10 h-10 text-[#7E8D9F] mx-auto mb-2 opacity-50" />
+              <p className="text-xs font-bold text-[#1B2A4A]">Seçilen filtrede rozet bulunamadı.</p>
+              <p className="text-[11px] text-[#7E8D9F] mt-0.5">Diğer filtre seçeneklerini deneyebilirsiniz.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 5. Detailed Badge Inspection Modal */}
       {inspectBadge && (

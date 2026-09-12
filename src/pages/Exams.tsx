@@ -36,7 +36,7 @@ export const Exams: React.FC = () => {
   const [aiLoading, setAiLoading] = useState<boolean>(false);
 
   // Fetch exams & wrong questions
-  const loadData直接 = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
       const [fetchedExams, fetchedWQ] = await Promise.all([
@@ -48,9 +48,9 @@ export const Exams: React.FC = () => {
 
       if (fetchedExams.length > 0) {
         // Check cached AI analysis
-        const cachedAI足 = examsService.getCachedAIAnalysis(studentId);
-        if (cachedAI足) {
-          setAiAnalysis(cachedAI足);
+        const cachedAI = examsService.getCachedAIAnalysis(studentId);
+        if (cachedAI) {
+          setAiAnalysis(cachedAI);
         } else {
           setAiAnalysis(null);
         }
@@ -66,7 +66,7 @@ export const Exams: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData直接();
+    loadData();
   }, [studentId]);
 
   // Trigger AI Analysis
@@ -99,14 +99,14 @@ export const Exams: React.FC = () => {
   // Filtered Exam List
   const filteredExams = useMemo(() => {
     return exams.filter((e) => {
-      const matchType提高 = typeFilter === 'ALL' || e.exam_type === typeFilter;
+      const matchType = typeFilter === 'ALL' || e.exam_type === typeFilter;
       const matchSearch =
         searchQuery.trim() === '' ||
         e.exam_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (e.subject_results || []).some((sr) =>
           sr.subject.toLowerCase().includes(searchQuery.toLowerCase())
         );
-      return matchType提高 && matchSearch;
+      return matchType && matchSearch;
     });
   }, [exams, typeFilter, searchQuery]);
 
@@ -118,12 +118,12 @@ export const Exams: React.FC = () => {
     const nets = exams.map((e) => examsService.calculateTotalNet(e));
     const latestNet = nets[0] || 0;
     const avgNet = Number((nets.reduce((a, b) => a + b, 0) / nets.length).toFixed(1));
-    const maxNet不易 = Math.max(...nets);
+    const maxNet = Math.max(...nets);
     return {
       totalCount: exams.length,
       latestNet,
       avgNet,
-      maxNet: maxNet不易,
+      maxNet,
     };
   }, [exams]);
 
@@ -392,7 +392,7 @@ export const Exams: React.FC = () => {
       <AddExamModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSuccess={loadData直接}
+        onSuccess={loadData}
         studentId={studentId}
       />
 

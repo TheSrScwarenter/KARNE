@@ -1,5 +1,8 @@
 import { supabase, isSupabaseConfigured } from '../../lib/supabase/client';
 import { WrongQuestion, ErrorType, QuestionDifficulty, WrongQuestionsAnalysisReport } from '../types';
+import { idbStorage, compressImage } from './indexedDbStorage';
+import { optimizeImageForUpload } from './imageOptimizer';
+import { questionLimitService } from './questionLimitService';
 export type { WrongQuestion, ErrorType, QuestionDifficulty, WrongQuestionsAnalysisReport };
 
 const STORAGE_KEY = 'karne_wrong_questions_cache';
@@ -285,8 +288,76 @@ export interface AnalyzeQuestionResult {
 }
 
 export const wrongQuestionsService = {
-  // Get all wrong questions for a student
+  // Check if live Supabase connection is actively configured
+  isSupabaseActive(): boolean {
+    return isSupabaseConfigured();
+  },
+
+  // One-time automatic migration: moves any legacy localStorage questions to Supabase / IndexedDB,
+  // and permanently purges localStorage keys to fix 'Quota Exceeded' errors forever.
+  async migrateAndPurgeLocalStorage(): Promise<void> {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        let list: WrongQuestion[] = [];
+        try {
+          list = JSON.parse(saved);
+        } catch {}
+
+        if (Array.isArray(list) && list.length > 0) {
+          // Backup to IndexedDB first
+          const existingIdb = (await idbStorage.getItem<WrongQuestion[]>(STORAGE_KEY)) || [];
+          const merged = [...list, ...existingIdb.filter((i) => !list.some((l) => l.id === i.id))];
+          await idbStorage.setItem(STORAGE_KEY, merged);
+
+          // If Supabase is configured, upload migrated questions
+          if (isSupabaseConfigured()) {
+            for (const q of list) {
+              try {
+                await supabase.from('wrong_questions').upsert([
+                  {
+                    id: q.id,
+                    student_id: q.student_id,
+                    image_url: q.image_url || null,
+                    raw_text: q.raw_text || null,
+                    exam_type: q.exam_type || 'TYT',
+                    subject: q.subject,
+                    topic: q.topic,
+                    subtopic: q.subtopic || null,
+                    error_type: q.error_type,
+                    difficulty: q.difficulty,
+                    ai_explanation: q.ai_explanation || null,
+                    study_tip: q.study_tip || null,
+                    student_note: q.student_note || null,
+                    created_at: q.created_at || new Date().toISOString(),
+                  },
+                ], { onConflict: 'id' });
+              } catch (err) {
+                console.warn('Migration item upsert error:', err);
+              }
+            }
+          }
+        }
+        // Permanently purge from localStorage to eliminate quota strain
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      localStorage.removeItem(ANALYSIS_CACHE_KEY);
+    } catch (e) {
+      console.warn('migrateAndPurgeLocalStorage warning:', e);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(ANALYSIS_CACHE_KEY);
+      } catch {}
+    }
+  },
+
+  // Get all wrong questions for a student directly from Supabase (with IndexedDB offline cache)
   async getQuestions(studentId: string): Promise<WrongQuestion[]> {
+    // Run migration/purge in background if old keys still exist
+    if (localStorage.getItem(STORAGE_KEY)) {
+      this.migrateAndPurgeLocalStorage().catch(() => {});
+    }
+
     if (isSupabaseConfigured()) {
       try {
         const { data, error } = await supabase
@@ -295,165 +366,245 @@ export const wrongQuestionsService = {
           .eq('student_id', studentId)
           .order('created_at', { ascending: false });
 
-        if (!error && data && data.length > 0) {
+        if (!error && Array.isArray(data)) {
+          // Keep offline IndexedDB cache fresh (never localStorage)
+          idbStorage.setItem(STORAGE_KEY, data).catch(() => {});
           return data as WrongQuestion[];
+        } else if (error) {
+          console.warn('Supabase wrong_questions fetch error:', error);
         }
       } catch (err) {
-        console.warn('Supabase wrong_questions fetch failed, using local cache:', err);
+        console.warn('Supabase wrong_questions fetch failed, using IndexedDB offline store:', err);
       }
     }
 
-    // Local storage fallback
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const list = JSON.parse(saved) as WrongQuestion[];
-        return list.filter((q) => !q.student_id || q.student_id === studentId);
-      } catch {
-        return [];
+    // Direct fallback from IndexedDB (Unlimited capacity, never throws QuotaExceeded)
+    try {
+      const idbList = await idbStorage.getItem<WrongQuestion[]>(STORAGE_KEY);
+      if (idbList && Array.isArray(idbList)) {
+        return idbList.filter((q) => !q.student_id || q.student_id === studentId);
       }
+    } catch (e) {
+      console.warn('IndexedDB read error:', e);
     }
 
     return [];
   },
 
-  // Add a new question to database and local cache
+  // Add a new question directly to Supabase and IndexedDB (Zero localStorage usage)
   async addQuestion(question: Omit<WrongQuestion, 'id' | 'created_at'>): Promise<WrongQuestion> {
+    // Quota check: Verify student question limit (default 400 or admin-configured)
+    const studentId = question.student_id;
+    if (studentId) {
+      const currentQuestions = await this.getQuestions(studentId);
+      const maxLimit = questionLimitService.getUserLimit(studentId);
+      if (currentQuestions.length >= maxLimit) {
+        throw new Error(
+          `Soru bankası kotanız (${maxLimit} soru) dolmuştur. Yeni soru eklemek için eski sorularınızı silebilir veya yöneticinizden kotanızı artırmasını talep edebilirsiniz.`
+        );
+      }
+    }
+
     const newId = 'wq-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+    
+    // Auto-compress image if it is a base64 Data URL
+    let optimizedImageUrl = question.image_url;
+    if (optimizedImageUrl && optimizedImageUrl.startsWith('data:image/')) {
+      try {
+        optimizedImageUrl = await compressImage(optimizedImageUrl, 1200, 1200, 0.72);
+      } catch (e) {
+        console.warn('Image compression fallback:', e);
+      }
+    }
+
     const newRecord: WrongQuestion = {
       ...question,
+      image_url: optimizedImageUrl,
       id: newId,
       created_at: new Date().toISOString(),
     };
 
+    let savedRecord = newRecord;
+
     if (isSupabaseConfigured()) {
       try {
+        const payload = {
+          id: newId,
+          student_id: question.student_id,
+          image_url: newRecord.image_url || null,
+          raw_text: question.raw_text || null,
+          exam_type: question.exam_type || 'TYT',
+          subject: question.subject,
+          topic: question.topic,
+          subtopic: question.subtopic || null,
+          error_type: question.error_type,
+          difficulty: question.difficulty,
+          ai_explanation: question.ai_explanation || null,
+          study_tip: question.study_tip || null,
+          student_note: question.student_note || null,
+          created_at: newRecord.created_at,
+        };
+
         const { data, error } = await supabase
           .from('wrong_questions')
-          .insert([
-            {
-              student_id: question.student_id,
-              image_url: question.image_url || null,
-              raw_text: question.raw_text || null,
-              subject: question.subject,
-              topic: question.topic,
-              subtopic: question.subtopic || null,
-              error_type: question.error_type,
-              difficulty: question.difficulty,
-              ai_explanation: question.ai_explanation || null,
-              student_note: question.student_note || null,
-            },
-          ])
+          .insert([payload])
           .select()
           .single();
 
         if (!error && data) {
-          return { ...data, exam_type: question.exam_type } as WrongQuestion;
+          savedRecord = { ...data, exam_type: question.exam_type } as WrongQuestion;
+        } else if (error) {
+          console.warn('Supabase wrong_questions direct insert error:', error);
         }
       } catch (err) {
-        console.warn('Supabase wrong_questions insert error, persisting locally:', err);
+        console.warn('Supabase direct insert exception, falling back to IndexedDB:', err);
       }
     }
 
-    // Persist to local cache
-    const existing = await this.getQuestions(question.student_id);
-    const updated = [newRecord, ...existing];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    return newRecord;
+    // Persist securely to IndexedDB (zero bytes written to localStorage)
+    try {
+      const existing = (await idbStorage.getItem<WrongQuestion[]>(STORAGE_KEY)) || [];
+      const updated = [savedRecord, ...existing.filter((q) => q.id !== savedRecord.id)];
+      await idbStorage.setItem(STORAGE_KEY, updated);
+    } catch (e) {
+      console.warn('IndexedDB write error:', e);
+    }
+
+    // Guarantee that old localStorage key is cleared if present
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+
+    return savedRecord;
   },
 
-  // Update existing question
+  // Update existing question directly in Supabase and IndexedDB
   async updateQuestion(id: string, updates: Partial<WrongQuestion>): Promise<void> {
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('wrong_questions').update(updates).eq('id', id);
+        const { error } = await supabase
+          .from('wrong_questions')
+          .update(updates)
+          .eq('id', id);
+        if (error) {
+          console.warn('Supabase update failed:', error);
+        }
       } catch (err) {
-        console.warn('Supabase update failed:', err);
+        console.warn('Supabase update error:', err);
       }
     }
 
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const list = JSON.parse(saved) as WrongQuestion[];
-        const index = list.findIndex((q) => q.id === id);
-        if (index !== -1) {
-          list[index] = { ...list[index], ...updates };
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-        }
-      } catch (e) {
-        console.error(e);
+    // Update in IndexedDB
+    try {
+      const idbList = (await idbStorage.getItem<WrongQuestion[]>(STORAGE_KEY)) || [];
+      const idx = idbList.findIndex((q) => q.id === id);
+      if (idx !== -1) {
+        idbList[idx] = { ...idbList[idx], ...updates };
+        await idbStorage.setItem(STORAGE_KEY, idbList);
       }
+    } catch (e) {
+      console.warn('IndexedDB update error:', e);
     }
   },
 
-  // Delete question
+  // Delete question directly from Supabase and IndexedDB
   async deleteQuestion(id: string): Promise<void> {
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('wrong_questions').delete().eq('id', id);
+        const { error } = await supabase
+          .from('wrong_questions')
+          .delete()
+          .eq('id', id);
+        if (error) {
+          console.warn('Supabase delete failed:', error);
+        }
       } catch (err) {
-        console.warn('Supabase delete failed:', err);
+        console.warn('Supabase delete error:', err);
       }
     }
 
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const list = JSON.parse(saved) as WrongQuestion[];
-        const updated = list.filter((q) => q.id !== id);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
+    // Delete in IndexedDB
+    try {
+      const idbList = (await idbStorage.getItem<WrongQuestion[]>(STORAGE_KEY)) || [];
+      const updatedIdb = idbList.filter((q) => q.id !== id);
+      await idbStorage.setItem(STORAGE_KEY, updatedIdb);
+    } catch (e) {
+      console.warn('IndexedDB delete error:', e);
     }
   },
 
-  // Upload image to Supabase storage bucket 'question-images' or convert to Base64
+  // Upload image to Supabase storage bucket 'question-images' or convert to compressed Base64
   async uploadImage(file: File): Promise<{ url: string; base64: string }> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64Data = reader.result as string;
+    // Compress and convert to ultra-light WebP/JPEG blob to save Supabase free tier storage
+    let optimizedBlob: Blob | null = null;
+    let optimizedBase64: string;
+    let targetContentType = 'image/jpeg';
+    let targetExtension = 'jpg';
 
-        if (isSupabaseConfigured()) {
-          try {
-            const fileExt = file.name.split('.').pop() || 'jpg';
-            const fileName = `question_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-            const filePath = `${fileName}`;
+    try {
+      const optResult = await optimizeImageForUpload(file, {
+        maxWidth: 1280,
+        maxHeight: 1280,
+        quality: 0.74,
+        preferredFormat: 'image/webp',
+      });
+      optimizedBlob = optResult.blob;
+      optimizedBase64 = optResult.dataUrl;
+      targetContentType = optResult.contentType;
+      targetExtension = targetContentType === 'image/webp' ? 'webp' : 'jpg';
 
-            const { data, error } = await supabase.storage
-              .from('question-images')
-              .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false,
-              });
-
-            if (!error && data) {
-              const { data: publicUrlData } = supabase.storage
-                .from('question-images')
-                .getPublicUrl(filePath);
-
-              resolve({
-                url: publicUrlData.publicUrl,
-                base64: base64Data,
-              });
-              return;
-            }
-          } catch (storageErr) {
-            console.warn('Supabase storage upload error, fallback to base64:', storageErr);
-          }
-        }
-
-        // Fallback or demo: resolve with base64 Data URL
-        resolve({
-          url: base64Data,
-          base64: base64Data,
+      console.info(
+        `[Photo Optimizer] Compressed: ${(file.size / 1024).toFixed(1)} KB -> ${(optResult.optimizedSize / 1024).toFixed(1)} KB (%${optResult.savingsPercentage} tasarruf)`
+      );
+    } catch (compErr) {
+      console.warn('Advanced image optimization fallback:', compErr);
+      try {
+        optimizedBase64 = await compressImage(file, 1200, 1200, 0.72);
+      } catch {
+        optimizedBase64 = await new Promise<string>((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result as string);
+          r.onerror = rej;
+          r.readAsDataURL(file);
         });
-      };
-      reader.onerror = (error) => reject(error);
-      reader.readAsDataURL(file);
-    });
+      }
+    }
+
+    if (isSupabaseConfigured() && optimizedBlob) {
+      try {
+        const fileName = `q_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${targetExtension}`;
+        const filePath = `${fileName}`;
+
+        const { data, error } = await supabase.storage
+          .from('question-images')
+          .upload(filePath, optimizedBlob, {
+            contentType: targetContentType,
+            cacheControl: '31536000, public, immutable',
+            upsert: false,
+          });
+
+        if (!error && data) {
+          const { data: publicUrlData } = supabase.storage
+            .from('question-images')
+            .getPublicUrl(filePath);
+
+          return {
+            url: publicUrlData.publicUrl,
+            base64: optimizedBase64,
+          };
+        } else if (error) {
+          console.warn('Supabase storage upload note (bucket might need public read/write SQL):', error.message);
+        }
+      } catch (storageErr) {
+        console.warn('Supabase storage upload error, fallback to compressed base64:', storageErr);
+      }
+    }
+
+    // Fallback: return compressed base64 URL
+    return {
+      url: optimizedBase64,
+      base64: optimizedBase64,
+    };
   },
 
   // AI Question Analysis via Backend Route /api/ai/analyze-question
@@ -529,17 +680,14 @@ export const wrongQuestionsService = {
     forceRefresh = false
   ): Promise<WrongQuestionsAnalysisReport> {
     if (!forceRefresh) {
-      const cached = localStorage.getItem(ANALYSIS_CACHE_KEY);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached) as WrongQuestionsAnalysisReport;
-          // Check if cache is still fresh (< 1 hour) and matches question count
-          if (parsed && parsed.total_questions_analyzed === questions.length) {
-            return parsed;
-          }
-        } catch {
-          // ignore cache parse error
+      try {
+        const cached = await idbStorage.getItem<WrongQuestionsAnalysisReport>(ANALYSIS_CACHE_KEY);
+        // Check if cache is fresh and matches current question count
+        if (cached && cached.total_questions_analyzed === questions.length) {
+          return cached;
         }
+      } catch (e) {
+        console.warn('idb cache read error:', e);
       }
     }
 
@@ -555,7 +703,7 @@ export const wrongQuestionsService = {
       }
 
       const data = (await response.json()) as WrongQuestionsAnalysisReport;
-      localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify(data));
+      await idbStorage.setItem(ANALYSIS_CACHE_KEY, data);
       return data;
     } catch (err) {
       console.warn('Backend AI wrong questions analysis failed, using client heuristic:', err);
@@ -637,7 +785,7 @@ export const wrongQuestionsService = {
         recommended_focus_area: weak_topics[0] ? `${weak_topics[0].subject} - ${weak_topics[0].topic}` : 'Genel Tekrar',
       };
 
-      localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify(fallbackReport));
+      await idbStorage.setItem(ANALYSIS_CACHE_KEY, fallbackReport);
       return fallbackReport;
     }
   },

@@ -22,10 +22,17 @@ import {
   Headphones,
   Sliders,
   X,
+  Sun,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { focusAudio } from '../lib/focusAudio';
 import { studySessionsService } from '../lib/studySessionsService';
+import { badgesService } from '../lib/badgesService';
+import { xpSettingsService } from '../lib/xpSettingsService';
+import { UserProfileStats } from '../types';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { LiveStudyTable } from '../components/LiveStudyTable';
 
 type TimerMode = 'pomodoro_25' | 'deep_50' | 'marathon_90' | 'stopwatch' | 'custom';
 type SoundscapeType = 'off' | 'rain' | 'binaural' | 'brownnoise' | 'whitenoise';
@@ -54,7 +61,7 @@ const MOTIVATIONAL_QUOTES = [
 ];
 
 export const FocusRoom: React.FC = () => {
-  const { user } = useAuth();
+  const { user, navigate } = useAuth();
   const studentId = user?.id || 'st-demo-001';
 
   // Timer Configuration & State
@@ -83,11 +90,104 @@ export const FocusRoom: React.FC = () => {
   // Gamification & Dopamine XP
   const [sessionXP, setSessionXP] = useState<number>(0);
   const [showCelebrationModal, setShowCelebrationModal] = useState<boolean>(false);
-  const [completedStats, setCompletedStats] = useState<{ durationMins: number; xp: number; subject: string } | null>(null);
+  const [completedStats, setCompletedStats] = useState<{
+    durationMins: number;
+    xp: number;
+    subject: string;
+    multiplier?: string;
+    bonusXp?: number;
+    newTotalXp?: number;
+    newLevel?: number;
+    newLevelTitle?: string;
+  } | null>(null);
 
-  // Daily Quick Stats
-  const [todayFocusMinutes, setTodayFocusMinutes] = useState<number>(145);
-  const [todayStreak, setTodayStreak] = useState<number>(14);
+  // Real Database & Storage Synced Live Stats (NO DEMO DATA)
+  const [profileStats, setProfileStats] = useState<UserProfileStats | null>(null);
+  const [baseTodayMinutes, setBaseTodayMinutes] = useState<number>(0);
+  const [liveSessionMinutes, setLiveSessionMinutes] = useState<number>(0);
+  const [isLoadingStats, setIsLoadingStats] = useState<boolean>(true);
+
+  // Screen Wake Lock API to prevent screen from sleeping during active focus
+  const wakeLockRef = useRef<any>(null);
+  const [isWakeLockActive, setIsWakeLockActive] = useState<boolean>(false);
+
+  const requestWakeLock = async () => {
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      try {
+        if (!wakeLockRef.current) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+          setIsWakeLockActive(true);
+          wakeLockRef.current.addEventListener('release', () => {
+            setIsWakeLockActive(false);
+            wakeLockRef.current = null;
+          });
+        }
+      } catch (err) {
+        console.warn('Screen Wake Lock request note:', err);
+      }
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+      } catch (err) {
+        console.warn('Screen Wake Lock release note:', err);
+      } finally {
+        wakeLockRef.current = null;
+        setIsWakeLockActive(false);
+      }
+    }
+  };
+
+  // Screen Wake Lock lifecycle management
+  useEffect(() => {
+    if (isRunning) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isRunning) {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
+    };
+  }, [isRunning]);
+
+  // Fetch real student stats and calculate today's minutes from actual sessions
+  const loadRealStats = async () => {
+    try {
+      setIsLoadingStats(true);
+      const [stats, sessions] = await Promise.all([
+        badgesService.getUserProfileStats(studentId),
+        studySessionsService.getSessions(studentId),
+      ]);
+      setProfileStats(stats);
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayMins = sessions
+        .filter((s) => s.start_time?.startsWith(todayStr) || s.created_at?.startsWith(todayStr))
+        .reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
+      setBaseTodayMinutes(todayMins);
+    } catch (err) {
+      console.error('Failed to load focus room stats:', err);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRealStats();
+  }, [studentId]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const quote = useMemo(() => {
@@ -102,6 +202,7 @@ export const FocusRoom: React.FC = () => {
       return {
         level: 1,
         title: 'Kıvılcım Odağı',
+        multiplierNumber: 1.0,
         multiplier: '1.0x',
         flameColor: '#7E8D9F',
         glowColor: 'rgba(126, 141, 159, 0.2)',
@@ -112,6 +213,7 @@ export const FocusRoom: React.FC = () => {
       return {
         level: 2,
         title: 'Alev Akışı',
+        multiplierNumber: 1.2,
         multiplier: '1.2x',
         flameColor: '#255A8A',
         glowColor: 'rgba(37, 90, 138, 0.3)',
@@ -122,6 +224,7 @@ export const FocusRoom: React.FC = () => {
       return {
         level: 3,
         title: 'Ateş Topu (Derin Odak)',
+        multiplierNumber: 1.5,
         multiplier: '1.5x',
         flameColor: '#D97736',
         glowColor: 'rgba(217, 119, 54, 0.4)',
@@ -132,6 +235,7 @@ export const FocusRoom: React.FC = () => {
       return {
         level: 4,
         title: 'Plazma Zihni',
+        multiplierNumber: 2.0,
         multiplier: '2.0x',
         flameColor: '#8E44AD',
         glowColor: 'rgba(142, 68, 173, 0.4)',
@@ -142,6 +246,7 @@ export const FocusRoom: React.FC = () => {
       return {
         level: 5,
         title: 'SÜPERNOVA AKIŞI 🔥',
+        multiplierNumber: 3.0,
         multiplier: '3.0x',
         flameColor: '#10B981',
         glowColor: 'rgba(16, 185, 129, 0.5)',
@@ -190,8 +295,11 @@ export const FocusRoom: React.FC = () => {
           setElapsedSeconds((prev) => {
             const next = prev + 1;
             if (next % 60 === 0) {
-              setSessionXP((xp) => xp + 15);
-              setTodayFocusMinutes((m) => m + 1);
+              const currentMins = Math.floor(next / 60);
+              const mult = currentMins < 15 ? 1.0 : currentMins < 30 ? 1.2 : currentMins < 50 ? 1.5 : currentMins < 80 ? 2.0 : 3.0;
+              const earnedThisMin = Math.round(15 * mult);
+              setSessionXP((xp) => xp + earnedThisMin);
+              setLiveSessionMinutes((m) => m + 1);
             }
             return next;
           });
@@ -203,9 +311,11 @@ export const FocusRoom: React.FC = () => {
               return 0;
             }
             if ((initialDuration - prev) % 60 === 0 && prev !== initialDuration) {
-              // Add XP per minute
-              setSessionXP((xp) => xp + 15);
-              setTodayFocusMinutes((m) => m + 1);
+              const elapsedMins = Math.floor((initialDuration - prev) / 60);
+              const mult = elapsedMins < 15 ? 1.0 : elapsedMins < 30 ? 1.2 : elapsedMins < 50 ? 1.5 : elapsedMins < 80 ? 2.0 : 3.0;
+              const earnedThisMin = Math.round(15 * mult);
+              setSessionXP((xp) => xp + earnedThisMin);
+              setLiveSessionMinutes((m) => m + 1);
             }
             return prev - 1;
           });
@@ -228,16 +338,13 @@ export const FocusRoom: React.FC = () => {
         ? Math.max(1, Math.round(elapsedSeconds / 60))
         : Math.max(1, Math.round(initialDuration / 60));
 
-    const totalXP = sessionXP + durationMins * 20 + (isGoalCompleted ? 100 : 0);
+    const xpSettings = xpSettingsService.getXPSettings();
+    const activeMultiplier = focusLevelInfo.multiplierNumber;
+    const completionBonus = Math.round(durationMins * (xpSettings.xpPerStudyMinute || 2) * 5 * activeMultiplier);
+    const goalBonus = isGoalCompleted ? (xpSettings.goalCompletionBonus || 100) : 0;
+    const totalEarnedXP = sessionXP + completionBonus + goalBonus;
 
-    setCompletedStats({
-      durationMins,
-      xp: totalXP,
-      subject: selectedSubject,
-    });
-    setShowCelebrationModal(true);
-
-    // Auto log to studySessionsService
+    // Auto log to studySessionsService and award real focus XP
     try {
       const now = new Date();
       const startD = new Date(now.getTime() - durationMins * 60 * 1000);
@@ -261,8 +368,48 @@ export const FocusRoom: React.FC = () => {
         end_time: now.toISOString(),
         duration_minutes: durationMins,
       });
+
+      // Award bonus focus XP permanently to user's all-time XP
+      await badgesService.addFocusXP(studentId, totalEarnedXP);
+
+      // Refresh live stats immediately
+      const [updatedStats, allSessions] = await Promise.all([
+        badgesService.getUserProfileStats(studentId),
+        studySessionsService.getSessions(studentId),
+      ]);
+      setProfileStats(updatedStats);
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const newTodayMins = allSessions
+        .filter((s) => s.start_time?.startsWith(todayStr) || s.created_at?.startsWith(todayStr))
+        .reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
+      setBaseTodayMinutes(newTodayMins);
+      setLiveSessionMinutes(0);
+
+      setCompletedStats({
+        durationMins,
+        xp: totalEarnedXP,
+        subject: selectedSubject,
+        multiplier: focusLevelInfo.multiplier,
+        bonusXp: completionBonus,
+        newTotalXp: updatedStats.level.current_xp,
+        newLevel: updatedStats.level.level,
+        newLevelTitle: updatedStats.level.level_title,
+      });
+      setShowCelebrationModal(true);
     } catch (e) {
       console.error('Failed to auto save focus session:', e);
+      setCompletedStats({
+        durationMins,
+        xp: totalEarnedXP,
+        subject: selectedSubject,
+        multiplier: focusLevelInfo.multiplier,
+        bonusXp: completionBonus,
+        newTotalXp: (profileStats?.level.current_xp || 0) + totalEarnedXP,
+        newLevel: profileStats?.level.level || 1,
+        newLevelTitle: profileStats?.level.level_title || 'YKS Yolcusu',
+      });
+      setShowCelebrationModal(true);
     }
   };
 
@@ -453,10 +600,18 @@ export const FocusRoom: React.FC = () => {
               {isRunning ? '🔥 Odaklanma Aktif' : 'Mola / Beklemede'}
             </p>
 
-            {/* Live XP Counter */}
-            <div className="mt-2 flex items-center gap-1.5 text-xs font-black text-[#D97736]">
-              <Zap className="w-3.5 h-3.5 fill-[#D97736]" />
-              <span>+{sessionXP} Odak Puanı (XP)</span>
+            {/* Live XP Counter & Screen Wake Lock Badge */}
+            <div className="mt-2 flex flex-col items-center gap-1">
+              <div className="flex items-center gap-1.5 text-xs font-black text-[#D97736]">
+                <Zap className="w-3.5 h-3.5 fill-[#D97736]" />
+                <span>+{sessionXP} Odak Puanı (XP)</span>
+              </div>
+              {isRunning && (
+                <div className="flex items-center gap-1 text-[10px] font-bold text-[#2E6B4F] bg-[#2E6B4F]/10 px-2 py-0.5 rounded-full border border-[#2E6B4F]/25 animate-pulse">
+                  <Sun className="w-2.5 h-2.5 text-[#2E6B4F]" />
+                  <span>Ekran Kilidi Açık (Wake Lock)</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -588,45 +743,182 @@ export const FocusRoom: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom Live Stats Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t border-current/10 text-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-current/5">
-            <Clock className="w-4 h-4 text-[#255A8A]" />
+      {/* Canlı Birlikte Çalışıyoruz Odak Masası */}
+      <div className="mt-6">
+        <LiveStudyTable
+          currentSubject={selectedSubject}
+          todayTotalMinutes={
+            baseTodayMinutes +
+            (mode === 'stopwatch'
+              ? Math.floor(elapsedSeconds / 60)
+              : Math.max(0, Math.floor((initialDuration - secondsLeft) / 60)))
+          }
+          isTimerRunning={isRunning}
+          dark={isZenMode}
+        />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* V0.8 BETA REAL-TIME PUAN (XP & LEVEL) VE İLERLEME MASASI                  */}
+      {/* ========================================================================= */}
+      <div
+        id="focus-puan-stats-section"
+        className={`mt-6 p-4 sm:p-5 rounded-2xl border transition-all ${
+          isZenMode ? 'bg-[#1C2541]/80 border-white/10' : 'bg-[#F7F4EE] border-[#DFD9CC]'
+        }`}
+      >
+        {/* Top Header Row of the Puan Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-current/10">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-[#D97736]/15 text-[#D97736]">
+              <Trophy className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider opacity-75">
+                V0.8 BETA CANLI GELİŞİM & PUAN MASASI
+              </span>
+              <h4 className="text-xs sm:text-sm font-extrabold flex items-center gap-2">
+                <span>Tüm Zamanlar XP & Derece İlerlemesi</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-[#2E6B4F]/15 text-[#2E6B4F] border border-[#2E6B4F]/25">
+                  Gerçek Veri
+                </span>
+              </h4>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] opacity-75 font-bold">Bugün Odak</p>
-            <p className="font-extrabold">{todayFocusMinutes} Dakika</p>
+
+          <button
+            type="button"
+            onClick={() => navigate('/profile')}
+            className={`self-start sm:self-auto px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              isZenMode
+                ? 'bg-white/10 hover:bg-white/15 text-white'
+                : 'bg-white hover:bg-[#EFEBE0] text-[#1B2A4A] border border-[#DFD9CC]'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5 text-[#D97736]" />
+            <span>Rozetler & Lig Tablosu</span>
+            <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+          </button>
+        </div>
+
+        {/* 1. Prominent All-Time XP & Level Card */}
+        <div
+          className={`mt-3 p-4 rounded-xl border transition-all ${
+            isZenMode ? 'bg-[#0B132B]/70 border-white/10' : 'bg-white border-[#DFD9CC]'
+          }`}
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#7E8D9F]">
+                  TÜM ZAMAN XP (TOPLAM PUAN)
+                </span>
+                {sessionXP > 0 && (
+                  <span className="text-[10px] font-extrabold text-[#2E6B4F] bg-[#2E6B4F]/10 px-2 py-0.5 rounded-full animate-pulse">
+                    +{sessionXP} XP canlı ekleniyor
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl sm:text-3xl font-black text-[#D97736] tracking-tight">
+                  <AnimatedNumber
+                    value={(profileStats?.level.current_xp || 0) + sessionXP}
+                    suffix=" XP"
+                    duration={1000}
+                  />
+                </span>
+                <span className="text-xs font-bold opacity-75">
+                  • Level {profileStats?.level.level || 1} ({profileStats?.level.level_title || 'YKS Yolcusu'})
+                </span>
+              </div>
+            </div>
+
+            {/* Level Progress Bar & Target */}
+            <div className="w-full md:w-64 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-bold">
+                <span className="opacity-75">Sonraki Seviye</span>
+                <span className="text-[#D97736]">
+                  {profileStats?.level.next_level_xp?.toLocaleString('tr-TR') || 400} XP Hedefi
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-current/10 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-[#D97736] to-[#2E6B4F] rounded-full transition-all duration-500"
+                  style={{ width: `${profileStats?.level.progress_percentage || 15}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] opacity-60">
+                <span>İlerleme: %{profileStats?.level.progress_percentage || 15}</span>
+                <span>{profileStats?.level.badges_unlocked_count || 0} Rozet Açıldı</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-current/5">
-            <Flame className="w-4 h-4 text-[#D97736]" />
+        {/* 2. Real Metric Strips */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+          {/* Today's Actual Focus Time */}
+          <div
+            className={`p-3 rounded-xl border flex items-center gap-3 transition-all ${
+              isZenMode ? 'bg-[#0B132B]/50 border-white/5' : 'bg-white border-[#DFD9CC]'
+            }`}
+          >
+            <div className="p-2.5 rounded-xl bg-[#255A8A]/10 text-[#255A8A] shrink-0">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] opacity-75 font-bold uppercase">Bugün Toplam Odak</p>
+              <p className="font-extrabold text-sm truncate">
+                {baseTodayMinutes + liveSessionMinutes} Dakika
+              </p>
+              <p className="text-[10px] opacity-60">
+                {baseTodayMinutes > 0
+                  ? `Önceki: ${baseTodayMinutes} dk ${liveSessionMinutes > 0 ? `+ ${liveSessionMinutes} dk canlı` : ''}`
+                  : 'Bugünkü ilk odak oturumu'}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] opacity-75 font-bold">Odak Serisi</p>
-            <p className="font-extrabold text-[#D97736]">{todayStreak} Gün Kesintisiz</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-current/5">
-            <Trophy className="w-4 h-4 text-[#2E6B4F]" />
+          {/* Real Streak Days */}
+          <div
+            className={`p-3 rounded-xl border flex items-center gap-3 transition-all ${
+              isZenMode ? 'bg-[#0B132B]/50 border-white/5' : 'bg-white border-[#DFD9CC]'
+            }`}
+          >
+            <div className="p-2.5 rounded-xl bg-[#D97736]/10 text-[#D97736] shrink-0">
+              <Flame className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] opacity-75 font-bold uppercase">Kesintisiz Seri</p>
+              <p className="font-extrabold text-sm text-[#D97736] truncate">
+                {profileStats?.streak.current_streak || 0} Gün
+              </p>
+              <p className="text-[10px] opacity-60">
+                {profileStats?.streak.is_studied_today || liveSessionMinutes > 0
+                  ? 'Bugün serin güvende 🔥'
+                  : 'Seriyi korumak için oturumu tamamla'}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] opacity-75 font-bold">Seviye & Derece</p>
-            <p className="font-extrabold text-[#2E6B4F]">Lv. 7 Üstat</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-current/5">
-            <Zap className="w-4 h-4 text-[#8E44AD]" />
-          </div>
-          <div>
-            <p className="text-[10px] opacity-75 font-bold">Oturum Puanı</p>
-            <p className="font-extrabold text-[#8E44AD]">+{sessionXP} XP</p>
+          {/* Active Session Live Gain */}
+          <div
+            className={`p-3 rounded-xl border flex items-center gap-3 transition-all ${
+              isZenMode ? 'bg-[#0B132B]/50 border-white/5' : 'bg-white border-[#DFD9CC]'
+            }`}
+          >
+            <div className="p-2.5 rounded-xl bg-[#8E44AD]/10 text-[#8E44AD] shrink-0">
+              <Zap className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] opacity-75 font-bold uppercase">Canlı Oturum Kazancı</p>
+              <p className="font-extrabold text-sm text-[#8E44AD] truncate">
+                +{sessionXP} XP
+              </p>
+              <p className="text-[10px] opacity-60">
+                {focusLevelInfo.multiplier} Hız Çarpanı {isGoalCompleted ? '• +100 XP Hedef' : ''}
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -647,7 +939,7 @@ export const FocusRoom: React.FC = () => {
                 Oturum Başarıyla Tamamlandı
               </h3>
               <p className="text-xs text-[#4A5B78] mt-1">
-                Çalışma süreniz otomatik olarak koçluk günlüğünüze ve haftalık hedeflerinize kaydedildi.
+                Çalışma süreniz ve kazandığınız XP otomatik olarak profilinize ve lig tablosuna işlendi.
               </p>
             </div>
 
@@ -663,8 +955,20 @@ export const FocusRoom: React.FC = () => {
               <div>
                 <p className="text-[10px] text-[#7E8D9F] font-bold">Kazanılan XP</p>
                 <p className="text-base font-black text-[#D97736]">+{completedStats.xp} XP</p>
+                <span className="block text-[9px] text-[#D97736] font-extrabold bg-[#D97736]/10 rounded-full px-1.5 py-0.5 mt-0.5">
+                  {completedStats.multiplier || '1.0x'} Çarpanı
+                </span>
               </div>
             </div>
+
+            {completedStats.newTotalXp !== undefined && (
+              <div className="p-3 rounded-xl bg-[#0071E3]/5 border border-[#0071E3]/15 flex items-center justify-between text-xs font-bold">
+                <span className="text-[#4A5B78]">Yeni Toplam Puanınız:</span>
+                <span className="text-[#0071E3] font-black text-sm">
+                  <AnimatedNumber value={completedStats.newTotalXp} suffix=" XP" duration={1200} />
+                </span>
+              </div>
+            )}
 
             <button
               type="button"
@@ -675,7 +979,7 @@ export const FocusRoom: React.FC = () => {
                 setIsGoalCompleted(false);
                 setMicroGoal('');
               }}
-              className="w-full py-3 bg-[#1B2A4A] hover:bg-[#255A8A] text-white text-xs font-extrabold rounded-xl transition-all shadow-md"
+              className="w-full py-3 bg-[#1B2A4A] hover:bg-[#255A8A] text-white text-xs font-extrabold rounded-xl transition-all shadow-md cursor-pointer"
             >
               Yeni Oturuma Hazırım 🚀
             </button>

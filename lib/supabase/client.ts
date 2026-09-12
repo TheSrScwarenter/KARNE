@@ -1,13 +1,21 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder-project.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+// User's configured Supabase project
+const defaultSupabaseUrl = 'https://abrrfeiyncyesaqdmxwx.supabase.co';
+const defaultPublishableKey = 'sb_publishable_ROq1etUvTdEjcDLK0Eyczg_TRKQX25t';
 
-export const isSupabaseConfigured = () => {
+const envUrl = import.meta.env.VITE_SUPABASE_URL || defaultSupabaseUrl;
+const rawUrl = envUrl.trim();
+// Strip trailing /rest/v1 or /rest/v1/ if present
+export const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '');
+export const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || defaultPublishableKey).trim();
+
+export const isSupabaseConfigured = (): boolean => {
   return (
-    Boolean(import.meta.env.VITE_SUPABASE_URL) &&
-    Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY) &&
-    !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')
+    Boolean(supabaseUrl) &&
+    Boolean(supabaseAnonKey) &&
+    !supabaseUrl.includes('placeholder') &&
+    !supabaseAnonKey.includes('placeholder')
   );
 };
 

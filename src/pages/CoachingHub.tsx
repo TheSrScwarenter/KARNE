@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { coachingHubService } from '../lib/coachingHubService';
+import { usersService, UserAccount } from '../lib/usersService';
+import { coachService, CoachStudent } from '../lib/coachService';
 import {
   CoachingMessage,
   CoachingAppointment,
@@ -22,19 +24,34 @@ import {
   X,
   ExternalLink,
   ChevronRight,
-  Filter,
   Sparkles,
-  HelpCircle,
   BookOpen,
+  User,
+  Users,
+  Check,
+  Award,
+  KeyRound,
+  ShieldCheck,
+  Copy,
 } from 'lucide-react';
 
 export const CoachingHub: React.FC = () => {
-  const { user } = useAuth();
-  const studentId = user?.role === 'student' ? user.id : 'st-demo-001';
+  const { user, refreshCurrentUser } = useAuth();
   const isCoach = user?.role === 'coach' || user?.role === 'admin';
 
   const [activeTab, setActiveTab] = useState<'chat' | 'appointments' | 'tasks'>('chat');
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Student perspective: Matched coach
+  const [matchedCoach, setMatchedCoach] = useState<UserAccount | null>(null);
+  const [inputCoachCode, setInputCoachCode] = useState<string>('');
+  const [matchingError, setMatchingError] = useState<string | null>(null);
+  const [matchingLoading, setMatchingLoading] = useState<boolean>(false);
+  const [copiedCoachCode, setCopiedCoachCode] = useState<boolean>(false);
+
+  // Coach perspective: Assigned students list
+  const [assignedStudents, setAssignedStudents] = useState<CoachStudent[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
 
   // 1. Chat State
   const [messages, setMessages] = useState<CoachingMessage[]>([]);
@@ -65,40 +82,113 @@ export const CoachingHub: React.FC = () => {
   );
   const [newTaskPriority, setNewTaskPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('high');
 
-  const loadData = async () => {
+  // Determine current active studentId and coachId
+  const activeStudentId = isCoach ? selectedStudentId : (user?.id || '');
+  const activeCoachId = isCoach ? (user?.id || '') : (matchedCoach?.id || user?.assigned_coach_id || '');
+
+  // Load perspective data
+  const loadPerspectiveData = async () => {
     setLoading(true);
     try {
-      const [fetchedMsgs, fetchedApps, fetchedTasks] = await Promise.all([
-        coachingHubService.getMessages(studentId),
-        coachingHubService.getAppointments(studentId),
-        coachingHubService.getTasks(studentId),
-      ]);
-      setMessages(fetchedMsgs);
-      setAppointments(fetchedApps);
-      setTasks(fetchedTasks);
+      if (isCoach) {
+        // Coach only sees students who registered with their code or are assigned to them
+        const coachStudents = await coachService.getStudents(
+          user?.id,
+          user?.coach_code,
+          user?.role === 'admin'
+        );
+        setAssignedStudents(coachStudents);
+        if (coachStudents.length > 0 && !selectedStudentId) {
+          setSelectedStudentId(coachStudents[0].id);
+        }
+      } else {
+        // Student only messages their assigned coach
+        if (user?.assigned_coach_id) {
+          const allCoaches = await usersService.getCoaches();
+          const found = allCoaches.find((c) => c.id === user.assigned_coach_id);
+          if (found) {
+            setMatchedCoach(found);
+          } else {
+            // Fetch directly
+            const allUsers = await usersService.getAllUsers();
+            const coaches = allUsers.filter((u) => u.role === 'coach');
+            const cFound = coaches.find((c) => c.id === user.assigned_coach_id);
+            if (cFound) setMatchedCoach(cFound);
+          }
+        } else {
+          setMatchedCoach(null);
+        }
+      }
     } catch (err) {
-      console.error('Failed to load coaching data:', err);
+      console.error('Perspective load error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, [studentId]);
+    loadPerspectiveData();
+  }, [user]);
+
+  // Load chat, appointments, and tasks for the active pair
+  const loadConversationData = async () => {
+    if (!activeStudentId) {
+      setMessages([]);
+      setAppointments([]);
+      setTasks([]);
+      return;
+    }
+
+    try {
+      const [fetchedMsgs, fetchedApps, fetchedTasks] = await Promise.all([
+        coachingHubService.getMessages(activeStudentId, activeCoachId || undefined),
+        coachingHubService.getAppointments(activeStudentId, activeCoachId || undefined),
+        coachingHubService.getTasks(activeStudentId),
+      ]);
+      setMessages(fetchedMsgs);
+      setAppointments(fetchedApps);
+      setTasks(fetchedTasks);
+    } catch (err) {
+      console.error('Conversation load error:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadConversationData();
+  }, [activeStudentId, activeCoachId]);
+
+  // Student: Match with Coach by Code
+  const handleMatchWithCoachCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputCoachCode.trim() || !user) return;
+
+    setMatchingLoading(true);
+    setMatchingError(null);
+    try {
+      const result = await usersService.assignCoachByCode(user.id, inputCoachCode.trim());
+      await refreshCurrentUser();
+      setMatchedCoach(result.coach);
+      setInputCoachCode('');
+    } catch (err: any) {
+      setMatchingError(err.message || 'Eşleşme başarısız oldu.');
+    } finally {
+      setMatchingLoading(false);
+    }
+  };
 
   // Handle Send Message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessageText.trim() && !newImageAttachment) return;
+    if (!activeStudentId || !activeCoachId) return;
 
     try {
       const sent = await coachingHubService.sendMessage({
-        sender_id: user?.id || 'st-demo-001',
-        sender_name: user?.full_name || 'Öğrenci',
-        sender_role: (user?.role as 'student' | 'coach') || 'student',
-        receiver_id: isCoach ? studentId : 'coach-001',
-        student_id: studentId,
+        sender_id: user?.id || 'usr-me',
+        sender_name: user?.full_name || (isCoach ? 'Koç' : 'Öğrenci'),
+        sender_role: isCoach ? 'coach' : 'student',
+        receiver_id: isCoach ? activeStudentId : activeCoachId,
+        student_id: activeStudentId,
         message_text: newMessageText.trim(),
         image_url: newImageAttachment || null,
         subject: selectedSubject,
@@ -109,25 +199,25 @@ export const CoachingHub: React.FC = () => {
       setNewImageAttachment('');
       setShowAttachInput(false);
     } catch (err) {
-      console.error('Failed to send message:', err);
+      console.error('Send message error:', err);
     }
   };
 
   // Handle Book Appointment
   const handleBookAppointment = async () => {
-    if (!bookingModalApp) return;
+    if (!bookingModalApp || !user) return;
     try {
       await coachingHubService.bookAppointment(
         bookingModalApp.id,
-        user?.id || 'st-demo-001',
-        user?.full_name || 'Ali Yılmaz',
+        user.id,
+        user.full_name || 'Öğrenci',
         bookingNote
       );
       setBookingModalApp(null);
       setBookingNote('');
-      await loadData();
+      await loadConversationData();
     } catch (err) {
-      console.error('Failed to book appointment:', err);
+      console.error('Book appointment error:', err);
     }
   };
 
@@ -135,9 +225,9 @@ export const CoachingHub: React.FC = () => {
   const handleCancelAppointment = async (appId: string) => {
     try {
       await coachingHubService.cancelAppointment(appId);
-      await loadData();
+      await loadConversationData();
     } catch (err) {
-      console.error('Failed to cancel appointment:', err);
+      console.error('Cancel appointment error:', err);
     }
   };
 
@@ -146,115 +236,132 @@ export const CoachingHub: React.FC = () => {
     e.preventDefault();
     try {
       await coachingHubService.createAppointmentSlot({
-        coach_id: user?.id || 'coach-001',
-        coach_name: user?.full_name || 'Ahmet Hoca (Koç)',
+        coach_id: user?.id || 'coach-id',
+        coach_name: user?.full_name || 'Eğitim Koçu',
         appointment_date: newSlotDate,
         start_time: newSlotStart,
         end_time: newSlotEnd,
         duration_minutes: 30,
-        meeting_title: 'Haftalık Koçluk Değerlendirmesi',
-        meeting_link: 'https://meet.google.com/karne-yks-koc',
+        meeting_title: 'Birebir Haftalık Değerlendirme',
+        meeting_link: 'https://meet.google.com/karne-yks',
         status: 'available',
+        student_id: null,
+        student_name: null,
       });
       setShowNewSlotModal(false);
-      await loadData();
+      await loadConversationData();
     } catch (err) {
-      console.error('Failed to create slot:', err);
-    }
-  };
-
-  // Handle Toggle Task Status
-  const handleToggleTaskStatus = async (task: CoachingTask) => {
-    const nextStatus: TaskStatus = task.status === 'completed' ? 'in_progress' : 'completed';
-    try {
-      const updated = await coachingHubService.updateTaskStatus(task.id, nextStatus);
-      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-    } catch (err) {
-      console.error('Failed to update task:', err);
+      console.error('Create slot error:', err);
     }
   };
 
   // Handle Create Task (Coach)
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskTitle.trim()) return;
+    if (!newTaskTitle.trim() || !activeStudentId) return;
 
     try {
       await coachingHubService.createTask({
-        coach_id: user?.id || 'coach-001',
-        coach_name: user?.full_name || 'Ahmet Hoca (Koç)',
-        student_id: studentId,
-        student_name: 'Ali Yılmaz',
+        coach_id: user?.id || 'coach-id',
+        coach_name: user?.full_name || 'Eğitim Koçu',
+        student_id: activeStudentId,
         title: newTaskTitle.trim(),
-        description: newTaskDesc.trim() || null,
+        description: newTaskDesc.trim(),
         subject: newTaskSubject,
         target_question_count: newTaskQuestions,
-        target_book_title: newTaskBook.trim() || null,
+        target_book: newTaskBook.trim() || undefined,
         due_date: newTaskDueDate,
-        priority: newTaskPriority,
         status: 'pending',
+        priority: newTaskPriority,
       });
-      setShowNewTaskModal(false);
+
       setNewTaskTitle('');
       setNewTaskDesc('');
-      setNewTaskBook('');
-      await loadData();
+      setShowNewTaskModal(false);
+      await loadConversationData();
     } catch (err) {
-      console.error('Failed to create task:', err);
+      console.error('Create task error:', err);
     }
   };
 
+  const handleUpdateTaskStatus = async (taskId: string, status: TaskStatus) => {
+    try {
+      await coachingHubService.updateTaskStatus(taskId, status);
+      await loadConversationData();
+    } catch (err) {
+      console.error('Update task status error:', err);
+    }
+  };
+
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCoachCode(true);
+    setTimeout(() => setCopiedCoachCode(false), 2000);
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+  };
+
   return (
-    <div id="coaching-hub-view" className="space-y-6 max-w-6xl mx-auto animate-in fade-in pb-12">
-      {/* 1. Header Banner */}
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#DFD9CC] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+    <div id="coaching-hub-view" className="space-y-6 max-w-6xl mx-auto apple-animate-in pb-12">
+      {/* 1. Header Banner & Apple Navigation */}
+      <div className="bg-white p-6 sm:p-7 rounded-[24px] border border-black/[0.06] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1B2A4A] to-[#255A8A] text-white flex items-center justify-center shadow-sm shrink-0">
-            <UserCheck className="w-7 h-7 text-[#D97736]" />
+          <div className="w-13 h-13 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center shrink-0">
+            <UserCheck className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-[#1B2A4A] tracking-tight">
-                Koçluk & Öğrenci İletişim Merkezi
+              <h1 className="text-xl sm:text-2xl font-bold text-[#1D1D1F] tracking-tight">
+                Koçluk & Canlı Mesajlaşma
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#2E6B4F]/15 text-[#2E6B4F] border border-[#2E6B4F]/25 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#2E6B4F] animate-pulse" />
-                <span>Canlı Bağlantı</span>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#34C759]/10 text-[#34C759] flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#34C759] animate-pulse" />
+                <span>Yetkili Birebir Kanal</span>
               </span>
             </div>
-            <p className="text-xs text-[#4A5B78] mt-1">
-              Birebir soru sorma sohbeti, haftalık görüşme randevu takvimi ve koç ödev takip paneli.
+            <p className="text-xs text-[#86868B] mt-1">
+              {isCoach
+                ? 'Yalnızca davet kodunuzla kayıt olan veya size atanan öğrencilerle mesajlaşma ve soru çözümü.'
+                : 'Yalnızca davet koduyla eşleştiğiniz koçunuzla birebir canlı soru iletimi ve görüşme.'}
             </p>
           </div>
         </div>
 
-        {/* Tab Navigation Controls */}
-        <div className="flex items-center gap-1.5 p-1.5 bg-[#F7F4EE] rounded-2xl border border-[#DFD9CC] self-start md:self-auto">
+        {/* Tab Navigation Controls (Apple Segmented Style) */}
+        <div className="apple-segmented-control p-1 self-start md:self-auto flex items-center gap-1">
           <button
             type="button"
             id="tab-btn-chat"
             onClick={() => setActiveTab('chat')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`py-2 px-3.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'chat'
-                ? 'bg-[#1B2A4A] text-white shadow-xs'
-                : 'text-[#4A5B78] hover:text-[#1B2A4A]'
+                ? 'apple-segmented-item-active text-[#1D1D1F]'
+                : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
-            <MessageSquare className="w-3.5 h-3.5 text-[#D97736]" />
-            <span>Mesajlaşma & Soru ({messages.length})</span>
+            <MessageSquare className="w-3.5 h-3.5 text-[#0071E3]" />
+            <span>Mesajlaşma ({messages.length})</span>
           </button>
 
           <button
             type="button"
             id="tab-btn-appointments"
             onClick={() => setActiveTab('appointments')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`py-2 px-3.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'appointments'
-                ? 'bg-[#1B2A4A] text-white shadow-xs'
-                : 'text-[#4A5B78] hover:text-[#1B2A4A]'
+                ? 'apple-segmented-item-active text-[#1D1D1F]'
+                : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
-            <Calendar className="w-3.5 h-3.5 text-[#255A8A]" />
+            <Calendar className="w-3.5 h-3.5 text-[#FF9500]" />
             <span>Görüşme Takvimi</span>
           </button>
 
@@ -262,68 +369,223 @@ export const CoachingHub: React.FC = () => {
             type="button"
             id="tab-btn-tasks"
             onClick={() => setActiveTab('tasks')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`py-2 px-3.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'tasks'
-                ? 'bg-[#1B2A4A] text-white shadow-xs'
-                : 'text-[#4A5B78] hover:text-[#1B2A4A]'
+                ? 'apple-segmented-item-active text-[#1D1D1F]'
+                : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
-            <CheckSquare className="w-3.5 h-3.5 text-[#2E6B4F]" />
+            <CheckSquare className="w-3.5 h-3.5 text-[#34C759]" />
             <span>Ödev & Görevler ({tasks.filter((t) => t.status !== 'completed').length})</span>
           </button>
         </div>
       </div>
 
-      {/* 2. TAB 1: BİREBİR CANLI MESAJLAŞMA & SORU SORMA */}
-      {activeTab === 'chat' && (
-        <div className="bg-white rounded-3xl border border-[#DFD9CC] shadow-xs overflow-hidden flex flex-col h-[650px]">
+      {/* 2. CASE A: STUDENT WITHOUT MATCHED COACH -> MANDATORY CODE ENTRY */}
+      {!isCoach && !user?.assigned_coach_id && (
+        <div className="bento-card p-6 sm:p-8 bg-white border border-[#DFD9CC] rounded-[24px] shadow-xs max-w-xl mx-auto text-center space-y-5">
+          <div className="w-14 h-14 rounded-3xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center mx-auto">
+            <KeyRound className="w-7 h-7" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-lg font-black text-[#1B2A4A]">
+              Koç Davet Kodu ile Eşleşin
+            </h2>
+            <p className="text-xs text-[#7E8D9F] leading-relaxed max-w-md mx-auto">
+              Gizlilik ve güvenlik kuralları gereği, koçluk mesajlaşması yalnızca kendi koçunuzun size ilettiği davet koduyla eşleştiğinizde aktifleşir. Bilgileriniz hiçbir yabancı koç tarafından görüntülenemez.
+            </p>
+          </div>
+
+          <form onSubmit={handleMatchWithCoachCode} className="space-y-4 max-w-md mx-auto">
+            <div className="text-left">
+              <label className="text-xs font-bold text-[#1B2A4A] block mb-1.5">
+                Koçunuzun Davet Kodu
+              </label>
+              <input
+                type="text"
+                value={inputCoachCode}
+                onChange={(e) => setInputCoachCode(e.target.value.toUpperCase())}
+                placeholder="Örn: SELIN-KOC veya YKS-KOC-XXXX"
+                className="apple-input w-full py-3 px-4 text-sm font-mono tracking-wider text-center uppercase"
+                required
+              />
+            </div>
+
+            {matchingError && (
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2 text-left">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{matchingError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={matchingLoading || !inputCoachCode.trim()}
+              className="apple-btn-primary w-full py-3 rounded-full text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              {matchingLoading ? (
+                <span>Kod Doğrulanıyor...</span>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Kodu Doğrula ve Koçumla Eşleş</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <p className="text-[11px] text-[#7E8D9F]">
+            Koçunuzun kodunu henüz almadıysanız rehber öğretmeninizden talep ediniz.
+          </p>
+        </div>
+      )}
+
+      {/* 2. CASE B: STUDENT WITH MATCHED COACH -> BANNER OF ASSIGNED COACH */}
+      {!isCoach && user?.assigned_coach_id && (
+        <div className="p-4 sm:p-5 bg-white border border-[#DFD9CC] rounded-[22px] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-[#0071E3] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+              {matchedCoach ? getInitials(matchedCoach.full_name) : 'KO'}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-[#1B2A4A]">
+                  {matchedCoach ? matchedCoach.full_name : user.assigned_coach_name || 'Eğitim Koçunuz'}
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#34C759]/10 text-[#34C759] border border-[#34C759]/20 flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  <span>Eşleşmiş Koçunuz</span>
+                </span>
+              </div>
+              <p className="text-xs text-[#7E8D9F] mt-0.5">
+                {matchedCoach?.coaching_specialty || 'YKS Eğitim Koçu & Danışmanı'} • Yalnızca bu koçunuzla birebir iletişimdesiniz.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-[#7E8D9F] bg-[#F5F5F7] px-3 py-1.5 rounded-xl border border-black/[0.04]">
+            <KeyRound className="w-3.5 h-3.5 text-[#0071E3]" />
+            <span>Koç Kodu: <strong>{matchedCoach?.coach_code || 'KAYITLI'}</strong></span>
+          </div>
+        </div>
+      )}
+
+      {/* 2. CASE C: COACH PERSPECTIVE -> STUDENT SELECTOR OR EMPTY INVITE CODE BANNER */}
+      {isCoach && (
+        <div className="p-5 bg-white border border-[#DFD9CC] rounded-[22px] shadow-xs space-y-4">
+          {assignedStudents.length === 0 ? (
+            <div className="text-center py-6 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+                <Users className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-[#1B2A4A]">
+                  Henüz Davet Kodunuzla Kayıt Olan Öğrenci Yok
+                </h3>
+                <p className="text-xs text-[#7E8D9F] max-w-md mx-auto">
+                  Gizlilik gereği yalnızca sizin kodunuzla kaydolan veya yönetim tarafından size atanan öğrenciler burada listelenir.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <div className="px-4 py-2 bg-[#F5F5F7] rounded-xl font-mono text-xs font-bold text-[#0071E3] border border-black/[0.06]">
+                  {user?.coach_code || 'SELIN-KOC'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyCode(user?.coach_code || 'SELIN-KOC')}
+                  className="apple-btn-secondary py-2 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  {copiedCoachCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedCoachCode ? 'Kopyalandı' : 'Kodu Kopyala'}</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#0071E3]" />
+                <span className="text-xs font-bold text-[#1B2A4A]">
+                  Mesajlaşılacak Kayıtlı Öğrenciniz ({assignedStudents.length}):
+                </span>
+              </div>
+
+              <select
+                value={selectedStudentId}
+                onChange={(e) => setSelectedStudentId(e.target.value)}
+                className="apple-input py-2 px-3.5 text-xs font-bold bg-white cursor-pointer"
+              >
+                {assignedStudents.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name} ({st.field}) • {st.targetDepartment || 'Bölüm'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. TAB 1: BİREBİR CANLI MESAJLAŞMA & SORU SORMA */}
+      {activeTab === 'chat' && (!(!isCoach && !user?.assigned_coach_id)) && (
+        <div className="bento-card bg-white rounded-[24px] border border-black/[0.06] shadow-xs overflow-hidden flex flex-col h-[650px]">
           {/* Chat Top Info Bar */}
-          <div className="p-4 px-6 bg-[#F7F4EE] border-b border-[#DFD9CC] flex items-center justify-between">
+          <div className="p-4 px-6 bg-[#F5F5F7] border-b border-black/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#1B2A4A] text-white flex items-center justify-center font-black text-sm">
-                AH
+              <div className="w-10 h-10 rounded-2xl bg-[#0071E3] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                {isCoach
+                  ? (assignedStudents.find((s) => s.id === selectedStudentId)?.name.substring(0, 2).toUpperCase() || 'ÖG')
+                  : (matchedCoach ? getInitials(matchedCoach.full_name) : 'KO')}
               </div>
               <div>
-                <h3 className="text-sm font-extrabold text-[#1B2A4A] flex items-center gap-1.5">
-                  <span>Ahmet Hoca (YKS Başkoçu)</span>
-                  <span className="w-2 h-2 rounded-full bg-[#2E6B4F]" />
+                <h3 className="text-xs font-bold text-[#1D1D1F] flex items-center gap-1.5">
+                  <span>
+                    {isCoach
+                      ? (assignedStudents.find((s) => s.id === selectedStudentId)?.name || 'Öğrenci Seçilmedi')
+                      : (matchedCoach ? matchedCoach.full_name : user?.assigned_coach_name || 'Eğitim Koçunuz')}
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-[#34C759]" title="Aktif" />
                 </h3>
-                <p className="text-[11px] text-[#7E8D9F]">Ortalama Yanıt Süresi: ~15 Dakika</p>
+                <p className="text-[11px] text-[#86868B]">
+                  {isCoach
+                    ? 'Birebir Koçluk & Soru Çözüm Hattı'
+                    : `${matchedCoach?.coaching_specialty || 'YKS Koçu'} • Birebir Soru Mesajlaşması`}
+                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#4A5B78]">
-              <span className="hidden sm:inline">Ders Seçimi:</span>
+            <div className="flex items-center gap-2 text-xs font-medium text-[#86868B]">
+              <span className="hidden sm:inline">Ders / Konu:</span>
               <select
                 value={selectedSubject}
                 onChange={(e) => setSelectedSubject(e.target.value)}
-                className="bg-white border border-[#DFD9CC] rounded-xl px-2.5 py-1 text-xs font-bold text-[#1B2A4A] focus:outline-hidden"
+                className="apple-input py-1.5 px-3 text-xs font-semibold cursor-pointer bg-white"
               >
-                <option value="Genel">Genel / Rehberlik</option>
+                <option value="Genel">Genel / Rehberlik & Strateji</option>
                 <option value="Matematik">Matematik</option>
                 <option value="Geometri">Geometri</option>
                 <option value="Fizik">Fizik</option>
                 <option value="Kimya">Kimya</option>
                 <option value="Biyoloji">Biyoloji</option>
                 <option value="Türkçe">Türkçe / Paragraf</option>
+                <option value="Sosyal">Sosyal Bilimler</option>
               </select>
             </div>
           </div>
 
           {/* Chat Messages Stream */}
-          <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-[#FAF8F5]">
+          <div className="flex-1 p-5 sm:p-6 overflow-y-auto space-y-4 bg-white">
             {messages.map((msg) => {
-              const isMine =
-                (user?.role === 'coach' && msg.sender_role === 'coach') ||
-                (user?.role !== 'coach' && msg.sender_role === 'student');
+              const isMine = msg.sender_id === user?.id;
 
               return (
                 <div
                   key={msg.id}
                   className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} space-y-1`}
                 >
-                  <div className="flex items-center gap-2 text-[10px] text-[#7E8D9F] px-1 font-semibold">
-                    <span>{msg.sender_name}</span>
+                  <div className="flex items-center gap-2 text-[10px] text-[#86868B] px-1 font-medium">
+                    <span className="font-semibold text-[#1D1D1F]">{msg.sender_name}</span>
                     <span>•</span>
                     <span>
                       {new Date(msg.created_at).toLocaleTimeString('tr-TR', {
@@ -332,21 +594,21 @@ export const CoachingHub: React.FC = () => {
                       })}
                     </span>
                     {msg.subject && (
-                      <span className="bg-[#DFD9CC]/50 px-1.5 py-0.2 rounded text-[#1B2A4A] font-bold">
+                      <span className="bg-[#F5F5F7] px-2 py-0.5 rounded-full text-[#1D1D1F] font-semibold border border-black/[0.04]">
                         {msg.subject}
                       </span>
                     )}
                   </div>
 
                   <div
-                    className={`max-w-lg p-4 rounded-2xl text-xs leading-relaxed shadow-2xs space-y-2 ${
+                    className={`max-w-lg p-4 rounded-2xl text-xs leading-relaxed shadow-xs space-y-2 ${
                       isMine
-                        ? 'bg-[#1B2A4A] text-white rounded-br-xs'
-                        : 'bg-white text-[#1B2A4A] border border-[#DFD9CC] rounded-bl-xs'
+                        ? 'bg-[#0071E3] text-white rounded-br-xs'
+                        : 'bg-[#F5F5F7] text-[#1D1D1F] border border-black/[0.04] rounded-bl-xs'
                     }`}
                   >
                     {msg.image_url && (
-                      <div className="rounded-xl overflow-hidden border border-white/20">
+                      <div className="rounded-xl overflow-hidden border border-black/[0.08]">
                         <img
                           src={msg.image_url}
                           alt="Soru Görseli"
@@ -363,25 +625,31 @@ export const CoachingHub: React.FC = () => {
             })}
 
             {messages.length === 0 && (
-              <div className="text-center py-12 text-[#7E8D9F]">
-                <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                <p className="text-xs font-bold text-[#1B2A4A]">Henüz mesajlaşma başlatılmadı.</p>
-                <p className="text-[11px]">Koçunuza takıldığınız soruları ve notlarınızı buradan yazabilirsiniz.</p>
+              <div className="text-center py-16 text-[#86868B]">
+                <div className="w-12 h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center mx-auto mb-3">
+                  <MessageSquare className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-bold text-[#1D1D1F]">
+                  Henüz mesaj bulunmuyor. İlk mesajı yazarak sohbeti başlatın.
+                </p>
+                <p className="text-[11px] mt-1 max-w-sm mx-auto text-[#86868B]">
+                  Çözemediğiniz soruların fotoğraf bağlantısını ekleyebilir, deneme sonuçlarınızı ve haftalık çalışma durumunuzu paylaşabilirsiniz.
+                </p>
               </div>
             )}
           </div>
 
           {/* Chat Input Bar */}
-          <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-[#DFD9CC] space-y-2">
+          <form onSubmit={handleSendMessage} className="p-4 bg-[#F5F5F7] border-t border-black/[0.06] space-y-2">
             {showAttachInput && (
-              <div className="flex items-center gap-2 p-2 bg-[#F7F4EE] rounded-xl border border-[#DFD9CC]">
-                <ImageIcon className="w-4 h-4 text-[#D97736]" />
+              <div className="flex items-center gap-2 p-2 bg-white rounded-xl border border-black/[0.08] shadow-2xs">
+                <ImageIcon className="w-4 h-4 text-[#0071E3]" />
                 <input
                   type="url"
                   placeholder="Soru görseli / ekran görüntüsü bağlantı linki (URL)..."
                   value={newImageAttachment}
                   onChange={(e) => setNewImageAttachment(e.target.value)}
-                  className="flex-1 bg-transparent text-xs text-[#1B2A4A] outline-hidden placeholder-[#7E8D9F]"
+                  className="flex-1 bg-transparent text-xs text-[#1D1D1F] outline-hidden placeholder-[#86868B]"
                 />
                 <button
                   type="button"
@@ -389,7 +657,7 @@ export const CoachingHub: React.FC = () => {
                     setShowAttachInput(false);
                     setNewImageAttachment('');
                   }}
-                  className="text-xs text-[#7E8D9F] hover:text-[#1B2A4A]"
+                  className="text-xs text-[#86868B] hover:text-[#1D1D1F] cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -401,10 +669,10 @@ export const CoachingHub: React.FC = () => {
                 type="button"
                 id="btn-attach-question-img"
                 onClick={() => setShowAttachInput(!showAttachInput)}
-                className={`p-2.5 rounded-xl border transition-colors ${
+                className={`p-2.5 rounded-full border transition-colors cursor-pointer ${
                   showAttachInput || newImageAttachment
-                    ? 'bg-[#D97736] text-white border-[#D97736]'
-                    : 'bg-[#F7F4EE] text-[#4A5B78] border-[#DFD9CC] hover:bg-[#EFEBE0]'
+                    ? 'bg-[#0071E3] text-white border-[#0071E3]'
+                    : 'bg-white text-[#86868B] border-black/[0.08] hover:text-[#1D1D1F]'
                 }`}
                 title="Soru Fotoğrafı Ekle"
               >
@@ -414,17 +682,21 @@ export const CoachingHub: React.FC = () => {
               <input
                 type="text"
                 id="input-chat-message"
-                placeholder="Koçunuza mesaj yazın veya sorunuzun püf noktasını sorun..."
+                placeholder={
+                  isCoach
+                    ? 'Öğrencinize mesajınızı veya çözüm tavsiyenizi yazın...'
+                    : 'Koçunuza sorunuzu veya çalışma durumunuzu yazın...'
+                }
                 value={newMessageText}
                 onChange={(e) => setNewMessageText(e.target.value)}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs text-[#1B2A4A] placeholder-[#7E8D9F] focus:outline-hidden focus:border-[#1B2A4A]"
+                className="apple-input flex-1 py-2.5 px-4 text-xs bg-white"
               />
 
               <button
                 type="submit"
                 id="btn-send-chat-msg"
                 disabled={!newMessageText.trim() && !newImageAttachment}
-                className="py-2.5 px-4 rounded-xl bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
+                className="apple-btn-primary py-2.5 px-4 text-xs font-semibold rounded-full flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <span>Gönder</span>
                 <Send className="w-3.5 h-3.5" />
@@ -434,17 +706,19 @@ export const CoachingHub: React.FC = () => {
         </div>
       )}
 
-      {/* 3. TAB 2: HAFTALIK GÖRÜŞME TAKVİMİ (APPOINTMENTS) */}
+      {/* 4. TAB 2: HAFTALIK GÖRÜŞME TAKVİMİ (APPOINTMENTS) */}
       {activeTab === 'appointments' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-[#DFD9CC]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-[24px] border border-black/[0.06] shadow-xs">
             <div>
-              <h2 className="text-base font-extrabold text-[#1B2A4A] flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-[#255A8A]" />
-                <span>Haftalık Birebir Koçluk Seansları</span>
+              <h2 className="text-sm font-bold text-[#1D1D1F] flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-[#0071E3]" />
+                <span>Birebir Koçluk Seansları</span>
               </h2>
-              <p className="text-xs text-[#7E8D9F] mt-0.5">
-                Koçunuzun müsait olduğu 30 dakikalık canlı Google Meet / Zoom değerlendirme slotları.
+              <p className="text-xs text-[#86868B] mt-0.5">
+                {isCoach
+                  ? 'Öğrencileriniz için tanımladığınız 30 dakikalık görüşme slotları.'
+                  : 'Koçunuzla birebir haftalık planlama ve değerlendirme randevusu.'}
               </p>
             </div>
 
@@ -453,10 +727,10 @@ export const CoachingHub: React.FC = () => {
                 type="button"
                 id="btn-create-slot"
                 onClick={() => setShowNewSlotModal(true)}
-                className="py-2 px-3.5 rounded-xl bg-[#1B2A4A] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs hover:bg-[#1B2A4A]/90"
+                className="apple-btn-primary py-2 px-3.5 rounded-full text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
               >
-                <Plus className="w-4 h-4 text-[#D97736]" />
-                <span>Yeni Müsaitlik Saati Ekle</span>
+                <Plus className="w-4 h-4" />
+                <span>Müsaitlik Saati Ekle</span>
               </button>
             )}
           </div>
@@ -464,106 +738,71 @@ export const CoachingHub: React.FC = () => {
           {/* Appointments Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {appointments.map((app) => {
-              const isBookedByMe = app.status === 'booked' && app.student_id === studentId;
+              const isBookedByMe = app.status === 'booked' && app.student_id === user?.id;
               const isAvailable = app.status === 'available';
 
               return (
                 <div
                   key={app.id}
-                  className={`p-5 rounded-3xl border transition-all flex flex-col justify-between ${
+                  className={`p-5 rounded-[22px] border transition-all flex flex-col justify-between ${
                     isBookedByMe
-                      ? 'bg-gradient-to-br from-[#1B2A4A] to-[#255A8A] text-white border-[#1B2A4A] shadow-sm'
-                      : isAvailable
-                      ? 'bg-white border-[#DFD9CC] shadow-xs hover:border-[#255A8A]'
-                      : 'bg-[#F7F4EE] border-[#DFD9CC] opacity-75'
+                      ? 'bg-[#0071E3]/5 border-[#0071E3] shadow-xs'
+                      : 'bg-white border-black/[0.06] hover:border-black/[0.12]'
                   }`}
                 >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
-                          isBookedByMe
-                            ? 'bg-[#D97736] text-white'
-                            : isAvailable
-                            ? 'bg-[#2E6B4F]/15 text-[#2E6B4F] border border-[#2E6B4F]/30'
-                            : 'bg-[#7E8D9F]/20 text-[#7E8D9F]'
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isAvailable
+                            ? 'bg-[#34C759]/10 text-[#34C759]'
+                            : 'bg-[#FF9500]/10 text-[#FF9500]'
                         }`}
                       >
-                        {isBookedByMe ? 'Randevun Ayrıldı' : isAvailable ? 'Müsait Slot' : 'Dolu'}
+                        {isAvailable ? 'Boş Slot' : 'Dolu Randevu'}
                       </span>
-                      <span
-                        className={`text-xs font-bold flex items-center gap-1 ${
-                          isBookedByMe ? 'text-gray-200' : 'text-[#7E8D9F]'
-                        }`}
-                      >
-                        <Clock className="w-3.5 h-3.5" />
+
+                      <span className="text-[11px] font-semibold text-[#86868B] flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
                         <span>{app.duration_minutes} Dk</span>
                       </span>
                     </div>
 
-                    <div>
-                      <h3
-                        className={`text-sm font-extrabold ${
-                          isBookedByMe ? 'text-white' : 'text-[#1B2A4A]'
-                        }`}
-                      >
-                        {app.meeting_title}
-                      </h3>
-                      <p
-                        className={`text-xs font-bold mt-1 ${
-                          isBookedByMe ? 'text-[#D97736]' : 'text-[#255A8A]'
-                        }`}
-                      >
-                        📅 {app.appointment_date} • ⏰ {app.start_time} - {app.end_time}
-                      </p>
-                    </div>
+                    <h4 className="text-xs font-bold text-[#1D1D1F]">{app.meeting_title}</h4>
+                    <p className="text-[11px] text-[#86868B]">Koç: {app.coach_name}</p>
 
-                    {app.student_note && (
-                      <p
-                        className={`text-[11px] p-2.5 rounded-xl ${
-                          isBookedByMe
-                            ? 'bg-white/10 text-gray-200'
-                            : 'bg-[#F7F4EE] text-[#4A5B78]'
-                        }`}
-                      >
-                        <strong>Not:</strong> {app.student_note}
-                      </p>
-                    )}
+                    <div className="p-3 bg-[#F5F5F7] rounded-xl text-xs space-y-1">
+                      <div className="flex items-center justify-between font-semibold text-[#1D1D1F]">
+                        <span>Tarih:</span>
+                        <span>{app.appointment_date}</span>
+                      </div>
+                      <div className="flex items-center justify-between font-semibold text-[#1D1D1F]">
+                        <span>Saat:</span>
+                        <span>
+                          {app.start_time} - {app.end_time}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-current/10 flex items-center justify-between gap-2">
-                    {isBookedByMe && (
-                      <>
-                        {app.meeting_link && (
-                          <a
-                            href={app.meeting_link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="py-1.5 px-3 rounded-xl bg-white text-[#1B2A4A] text-xs font-bold flex items-center gap-1 hover:bg-gray-100 transition-colors shadow-xs"
-                          >
-                            <Video className="w-3.5 h-3.5 text-[#2E6B4F]" />
-                            <span>Görüşmeye Katıl</span>
-                          </a>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleCancelAppointment(app.id)}
-                          className="py-1.5 px-2.5 text-xs text-red-200 hover:text-white font-bold"
-                        >
-                          İptal Et
-                        </button>
-                      </>
-                    )}
-
-                    {isAvailable && (
+                  <div className="mt-4 pt-3 border-t border-black/[0.04]">
+                    {!isCoach && isAvailable && (
                       <button
                         type="button"
-                        id={`btn-book-${app.id}`}
                         onClick={() => setBookingModalApp(app)}
-                        className="w-full py-2 px-3 rounded-xl bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1"
+                        className="apple-btn-primary w-full py-2 text-xs font-semibold rounded-full cursor-pointer"
                       >
-                        <Calendar className="w-3.5 h-3.5 text-[#D97736]" />
-                        <span>Bu Saati Rezerve Et</span>
+                        Randevu Al
+                      </button>
+                    )}
+
+                    {!isCoach && isBookedByMe && (
+                      <button
+                        type="button"
+                        onClick={() => handleCancelAppointment(app.id)}
+                        className="w-full py-2 text-xs font-semibold rounded-full text-rose-600 bg-rose-50 hover:bg-rose-100 cursor-pointer"
+                      >
+                        Randevuyu İptal Et
                       </button>
                     )}
                   </div>
@@ -573,264 +812,203 @@ export const CoachingHub: React.FC = () => {
           </div>
 
           {appointments.length === 0 && (
-            <div className="p-8 text-center bg-[#FAF8F5] rounded-3xl border border-dashed border-[#DFD9CC] space-y-3">
-              <Calendar className="w-10 h-10 text-[#7E8D9F] mx-auto opacity-50" />
-              <p className="text-xs font-bold text-[#1B2A4A]">Henüz planlanmış veya müsait koçluk seansı bulunmuyor.</p>
-              <p className="text-[11px] text-[#7E8D9F] max-w-md mx-auto">
-                {isCoach
-                  ? 'Öğrencilerinizin rezervasyon yapabilmesi için yeni müsaitlik saatleri ekleyebilirsiniz.'
-                  : 'Koçunuz müsaitlik saatlerini açtığında buradan 15-30 dakikalık değerlendirme seansı rezerve edebilirsiniz.'}
-              </p>
-              {isCoach && (
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowNewSlotModal(true)}
-                    className="py-2 px-4 rounded-xl bg-[#1B2A4A] text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
-                  >
-                    <Plus className="w-4 h-4 text-[#D97736]" />
-                    <span>Müsaitlik Saati Ekle</span>
-                  </button>
-                </div>
-              )}
+            <div className="text-center py-12 bg-white rounded-[24px] border border-black/[0.06] text-[#86868B]">
+              <Calendar className="w-8 h-8 mx-auto mb-2 text-[#0071E3]/40" />
+              <p className="text-xs font-bold text-[#1D1D1F]">Henüz planlanmış randevu bulunmuyor.</p>
+              <p className="text-[11px] mt-1">Koçunuz müsaitlik eklediğinde burada görüntülenecektir.</p>
             </div>
           )}
         </div>
       )}
 
-      {/* 4. TAB 3: ÖDEV & GÖREV ATAMA SİSTEMİ (TASKS) */}
+      {/* 5. TAB 3: ÖDEV & GÖREVLER (TASKS) */}
       {activeTab === 'tasks' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-[#DFD9CC]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-[24px] border border-black/[0.06] shadow-xs">
             <div>
-              <h2 className="text-base font-extrabold text-[#1B2A4A] flex items-center gap-2">
-                <CheckSquare className="w-5 h-5 text-[#2E6B4F]" />
-                <span>Koçun Tanımladığı Haftalık Hedef ve Ödevler</span>
+              <h2 className="text-sm font-bold text-[#1D1D1F] flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-[#34C759]" />
+                <span>Haftalık Ödevler & Görev Takibi</span>
               </h2>
-              <p className="text-xs text-[#7E8D9F] mt-0.5">
-                Teslim tarihli soru hedefleri, fasikül ödevleri ve tarama testleri.
+              <p className="text-xs text-[#86868B] mt-0.5">
+                Koç tarafından atanan soru hedefleri, konu tamamlama ve deneme çözümleri.
               </p>
             </div>
 
             {isCoach && (
               <button
                 type="button"
-                id="btn-new-task-modal"
                 onClick={() => setShowNewTaskModal(true)}
-                className="py-2 px-3.5 rounded-xl bg-[#1B2A4A] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs hover:bg-[#1B2A4A]/90"
+                className="apple-btn-primary py-2 px-3.5 rounded-full text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
               >
-                <Plus className="w-4 h-4 text-[#D97736]" />
-                <span>Öğrenciye Yeni Ödev Ata</span>
+                <Plus className="w-4 h-4" />
+                <span>Yeni Ödev Ata</span>
               </button>
             )}
           </div>
 
-          {/* Tasks List */}
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {tasks.map((task) => {
               const isCompleted = task.status === 'completed' || task.status === 'verified';
 
               return (
                 <div
                   key={task.id}
-                  className={`p-5 rounded-3xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                  className={`p-5 rounded-[22px] border transition-all flex flex-col justify-between ${
                     isCompleted
-                      ? 'bg-[#F7F4EE]/60 border-[#DFD9CC] opacity-80'
-                      : 'bg-white border-[#DFD9CC] shadow-xs'
+                      ? 'bg-emerald-500/5 border-emerald-500/20'
+                      : 'bg-white border-black/[0.06]'
                   }`}
                 >
-                  <div className="flex items-start gap-3.5">
-                    <button
-                      type="button"
-                      id={`btn-check-task-${task.id}`}
-                      onClick={() => handleToggleTaskStatus(task)}
-                      className={`w-6 h-6 rounded-xl border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
-                        isCompleted
-                          ? 'bg-[#2E6B4F] border-[#2E6B4F] text-white'
-                          : 'border-[#DFD9CC] hover:border-[#2E6B4F] text-transparent'
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0071E3]/10 text-[#0071E3]">
+                        {task.subject}
+                      </span>
+                      <span className="text-[11px] font-semibold text-[#86868B]">
+                        Son: {task.due_date}
+                      </span>
+                    </div>
+
+                    <h4
+                      className={`text-sm font-bold ${
+                        isCompleted ? 'line-through text-[#86868B]' : 'text-[#1D1D1F]'
                       }`}
                     >
-                      <CheckCircle2 className="w-4 h-4" />
-                    </button>
+                      {task.title}
+                    </h4>
 
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3
-                          className={`text-sm font-extrabold ${
-                            isCompleted
-                              ? 'line-through text-[#7E8D9F]'
-                              : 'text-[#1B2A4A]'
-                          }`}
-                        >
-                          {task.title}
-                        </h3>
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-[#1B2A4A]/10 text-[#1B2A4A]">
-                          {task.subject}
-                        </span>
-                        {task.priority === 'urgent' && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-[#C0392B]/15 text-[#C0392B]">
-                            Acil
-                          </span>
-                        )}
+                    {task.description && (
+                      <p className="text-xs text-[#86868B]">{task.description}</p>
+                    )}
+
+                    {task.target_question_count && (
+                      <div className="text-xs font-semibold text-[#0071E3]">
+                        Hedef: {task.target_question_count} Soru
                       </div>
-
-                      {task.description && (
-                        <p className="text-xs text-[#4A5B78] mt-1">{task.description}</p>
-                      )}
-
-                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#7E8D9F] mt-2">
-                        {task.target_book_title && (
-                          <span className="flex items-center gap-1 text-[#255A8A] font-semibold">
-                            <BookOpen className="w-3.5 h-3.5" />
-                            {task.target_book_title}
-                          </span>
-                        )}
-                        {task.target_question_count && (
-                          <span className="font-semibold text-[#1B2A4A]">
-                            🎯 Hedef: {task.target_question_count} Soru
-                          </span>
-                        )}
-                        <span>📅 Son Tarih: {task.due_date}</span>
-                      </div>
-                    </div>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 self-end md:self-auto">
+                  <div className="mt-4 pt-3 border-t border-black/[0.04] flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[#86868B]">
+                      {isCompleted ? '✓ Tamamlandı' : 'Bekliyor'}
+                    </span>
+
                     <button
                       type="button"
-                      onClick={() => handleToggleTaskStatus(task)}
-                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all ${
+                      onClick={() =>
+                        handleUpdateTaskStatus(task.id, isCompleted ? 'pending' : 'completed')
+                      }
+                      className={`py-1.5 px-3 rounded-full text-xs font-semibold cursor-pointer ${
                         isCompleted
-                          ? 'bg-[#2E6B4F]/15 text-[#2E6B4F] border border-[#2E6B4F]/30'
-                          : 'bg-[#1B2A4A] text-white hover:bg-[#1B2A4A]/90'
+                          ? 'bg-gray-100 text-gray-700'
+                          : 'bg-[#34C759] text-white'
                       }`}
                     >
-                      {isCompleted ? '✓ Tamamlandı' : 'Tamamlandı Olarak İşaretle'}
+                      {isCompleted ? 'Geri Al' : 'Tamamla'}
                     </button>
                   </div>
                 </div>
               );
             })}
-
-            {tasks.length === 0 && (
-              <div className="p-8 text-center bg-[#F7F4EE] rounded-3xl border border-[#DFD9CC]">
-                <CheckSquare className="w-10 h-10 text-[#7E8D9F] mx-auto mb-2 opacity-50" />
-                <p className="text-xs font-bold text-[#1B2A4A]">Şu an atanmış aktif ödev bulunmuyor.</p>
-              </div>
-            )}
           </div>
+
+          {tasks.length === 0 && (
+            <div className="text-center py-12 bg-white rounded-[24px] border border-black/[0.06] text-[#86868B]">
+              <CheckSquare className="w-8 h-8 mx-auto mb-2 text-[#34C759]/40" />
+              <p className="text-xs font-bold text-[#1D1D1F]">Henüz atanmış ödev bulunmuyor.</p>
+              <p className="text-[11px] mt-1">Koçunuz ödev atadığında burada listelenecektir.</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 5. MODAL: BOOK APPOINTMENT */}
+      {/* Booking Modal */}
       {bookingModalApp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1B2A4A]/50 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl border border-[#DFD9CC] shadow-xl p-6 sm:p-8 relative">
-            <button
-              type="button"
-              onClick={() => setBookingModalApp(null)}
-              className="absolute top-4 right-4 p-2 rounded-xl text-[#7E8D9F] hover:bg-[#F7F4EE]"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-lg font-black text-[#1B2A4A] flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-[#255A8A]" />
-              <span>Koçluk Seansı Rezerve Et</span>
-            </h3>
-
-            <p className="text-xs text-[#7E8D9F] mt-1">
-              {bookingModalApp.appointment_date} saat {bookingModalApp.start_time} - {bookingModalApp.end_time} arasındaki görüşme.
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-4 border border-black/[0.06] shadow-xl">
+            <h3 className="text-sm font-bold text-[#1D1D1F]">Randevu Onayı</h3>
+            <p className="text-xs text-[#86868B]">
+              {bookingModalApp.appointment_date} günü saat {bookingModalApp.start_time} seansı için randevu alıyorsunuz.
             </p>
 
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="text-xs font-bold text-[#1B2A4A] block mb-1">
-                  Koça İletmek İstediğin Özel Not / Konu Başlığı
-                </label>
-                <textarea
-                  rows={3}
-                  value={bookingNote}
-                  onChange={(e) => setBookingNote(e.target.value)}
-                  placeholder="Örn: Bu hafta TYT Türkçe netlerimi ve Geometri çalışma sıklığımı değerlendirmek istiyorum..."
-                  className="w-full p-3 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs text-[#1B2A4A] outline-hidden focus:border-[#1B2A4A]"
-                />
-              </div>
+            <textarea
+              rows={3}
+              placeholder="Koçunuza iletmek istediğiniz özel bir not / soru konusu var mı?"
+              value={bookingNote}
+              onChange={(e) => setBookingNote(e.target.value)}
+              className="apple-input w-full text-xs"
+            />
 
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setBookingModalApp(null)}
-                  className="flex-1 py-2.5 rounded-xl border border-[#DFD9CC] text-xs font-bold text-[#4A5B78] hover:bg-[#F7F4EE]"
-                >
-                  Vazgeç
-                </button>
-                <button
-                  type="button"
-                  id="btn-confirm-appointment"
-                  onClick={handleBookAppointment}
-                  className="flex-1 py-2.5 rounded-xl bg-[#1B2A4A] text-white text-xs font-bold hover:bg-[#1B2A4A]/90 shadow-xs"
-                >
-                  Randevuyu Onayla
-                </button>
-              </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setBookingModalApp(null)}
+                className="apple-btn-secondary py-2 px-4 text-xs font-semibold rounded-full cursor-pointer"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={handleBookAppointment}
+                className="apple-btn-primary py-2 px-4 text-xs font-semibold rounded-full cursor-pointer"
+              >
+                Onayla & Randevuyu Al
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 6. MODAL: CREATE APPOINTMENT SLOT (COACH) */}
+      {/* New Slot Modal (Coach) */}
       {showNewSlotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1B2A4A]/50 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl border border-[#DFD9CC] shadow-xl p-6 sm:p-8 relative">
-            <button
-              type="button"
-              onClick={() => setShowNewSlotModal(false)}
-              className="absolute top-4 right-4 p-2 rounded-xl text-[#7E8D9F] hover:bg-[#F7F4EE]"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-lg font-black text-[#1B2A4A]">Yeni Müsaitlik Saati Ekle</h3>
-            <form onSubmit={handleCreateSlot} className="mt-4 space-y-3">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-4 border border-black/[0.06] shadow-xl">
+            <h3 className="text-sm font-bold text-[#1D1D1F]">Yeni Müsaitlik Saati Ekle</h3>
+            <form onSubmit={handleCreateSlot} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Tarih</label>
+                <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Tarih</label>
                 <input
                   type="date"
                   value={newSlotDate}
                   onChange={(e) => setNewSlotDate(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs font-bold"
+                  className="apple-input w-full text-xs font-semibold"
                   required
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Başlangıç</label>
+                  <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Başlangıç</label>
                   <input
                     type="time"
                     value={newSlotStart}
                     onChange={(e) => setNewSlotStart(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs font-bold"
+                    className="apple-input w-full text-xs font-semibold"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Bitiş</label>
+                  <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Bitiş</label>
                   <input
                     type="time"
                     value={newSlotEnd}
                     onChange={(e) => setNewSlotEnd(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs font-bold"
+                    className="apple-input w-full text-xs font-semibold"
                     required
                   />
                 </div>
               </div>
-
-              <div className="pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewSlotModal(false)}
+                  className="apple-btn-secondary py-2 px-4 text-xs font-semibold rounded-full cursor-pointer"
+                >
+                  İptal
+                </button>
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-[#1B2A4A] text-white text-xs font-bold hover:bg-[#1B2A4A]/90 shadow-xs"
+                  className="apple-btn-primary py-2 px-4 text-xs font-semibold rounded-full cursor-pointer"
                 >
                   Slotu Kaydet
                 </button>
@@ -840,39 +1018,31 @@ export const CoachingHub: React.FC = () => {
         </div>
       )}
 
-      {/* 7. MODAL: CREATE TASK (COACH) */}
+      {/* New Task Modal (Coach) */}
       {showNewTaskModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1B2A4A]/50 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl border border-[#DFD9CC] shadow-xl p-6 sm:p-8 relative">
-            <button
-              type="button"
-              onClick={() => setShowNewTaskModal(false)}
-              className="absolute top-4 right-4 p-2 rounded-xl text-[#7E8D9F] hover:bg-[#F7F4EE]"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-lg font-black text-[#1B2A4A]">Öğrenciye Yeni Görev / Ödev Tanımla</h3>
-            <form onSubmit={handleCreateTask} className="mt-4 space-y-3">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-4 border border-black/[0.06] shadow-xl">
+            <h3 className="text-sm font-bold text-[#1D1D1F]">Öğrenciye Ödev Ata</h3>
+            <form onSubmit={handleCreateTask} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Ödev Başlığı</label>
+                <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Ödev Başlığı</label>
                 <input
                   type="text"
-                  placeholder="Örn: 3D Geometri Çemberde Açı 3 Test"
+                  placeholder="Örn: Limit & Süreklilik 60 Soru Çözümü"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs text-[#1B2A4A]"
+                  className="apple-input w-full text-xs font-semibold"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Ders</label>
+                  <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Ders</label>
                   <select
                     value={newTaskSubject}
                     onChange={(e) => setNewTaskSubject(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs font-bold"
+                    className="apple-input w-full text-xs font-semibold cursor-pointer"
                   >
                     <option value="Matematik">Matematik</option>
                     <option value="Geometri">Geometri</option>
@@ -883,44 +1053,44 @@ export const CoachingHub: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Soru Sayısı</label>
+                  <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Soru Sayısı</label>
                   <input
                     type="number"
                     value={newTaskQuestions}
                     onChange={(e) => setNewTaskQuestions(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs font-bold"
+                    className="apple-input w-full text-xs font-semibold"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Hedef Kitap / Fasikül</label>
+                <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Hedef Kitap / Fasikül</label>
                 <input
                   type="text"
                   placeholder="Örn: Bilgi Sarmal AYT Fizik"
                   value={newTaskBook}
                   onChange={(e) => setNewTaskBook(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs"
+                  className="apple-input w-full text-xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Teslim Tarihi</label>
+                  <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Teslim Tarihi</label>
                   <input
                     type="date"
                     value={newTaskDueDate}
                     onChange={(e) => setNewTaskDueDate(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs font-bold"
+                    className="apple-input w-full text-xs font-semibold"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Öncelik</label>
+                  <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Öncelik</label>
                   <select
                     value={newTaskPriority}
                     onChange={(e) => setNewTaskPriority(e.target.value as any)}
-                    className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs font-bold"
+                    className="apple-input w-full text-xs font-semibold cursor-pointer"
                   >
                     <option value="low">Düşük</option>
                     <option value="medium">Normal</option>
@@ -931,20 +1101,27 @@ export const CoachingHub: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-[#1B2A4A] block mb-1">Açıklama / Koç Talimatı</label>
+                <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Açıklama / Koç Talimatı</label>
                 <textarea
                   rows={2}
                   value={newTaskDesc}
                   onChange={(e) => setNewTaskDesc(e.target.value)}
                   placeholder="Süre tutarak çöz ve yanlışları kaydet..."
-                  className="w-full p-2.5 rounded-xl bg-[#F7F4EE] border border-[#DFD9CC] text-xs"
+                  className="apple-input w-full text-xs"
                 />
               </div>
 
-              <div className="pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewTaskModal(false)}
+                  className="apple-btn-secondary py-2 px-4 text-xs font-semibold rounded-full cursor-pointer"
+                >
+                  İptal
+                </button>
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-[#1B2A4A] text-white text-xs font-bold hover:bg-[#1B2A4A]/90 shadow-xs"
+                  className="apple-btn-primary py-2 px-4 text-xs font-semibold rounded-full cursor-pointer"
                 >
                   Ödevi Ata
                 </button>

@@ -7,18 +7,13 @@ import {
   CalendarDays,
   Users,
   ArrowRight,
-  TrendingUp,
   Target,
   Sparkles,
   BookOpen,
-  Calendar,
-  AlertCircle,
-  CheckCircle2,
-  Plus,
   Flame,
   Trophy,
   MessageSquare,
-  UserCheck,
+  TrendingUp,
 } from 'lucide-react';
 import { examsService } from '../lib/examsService';
 import { studySessionsService } from '../lib/studySessionsService';
@@ -28,6 +23,7 @@ import { programService } from '../lib/programService';
 import { badgesService } from '../lib/badgesService';
 import { Exam, StudySession, WrongQuestion, StudentBook, StudyProgram, StreakInfo, UserBadge } from '../types';
 import { DashboardExamTrendChart } from '../components/DashboardExamTrendChart';
+import { YksCountdownWidget } from '../components/YksCountdownWidget';
 
 export const StudentDashboard: React.FC = () => {
   const { user, navigate } = useAuth();
@@ -85,12 +81,6 @@ export const StudentDashboard: React.FC = () => {
   // Latest exam net
   const latestExam = exams[0];
   const latestExamNet = latestExam ? examsService.calculateTotalNet(latestExam) : null;
-
-  // Calculate days to YKS 2026 (Mid June 2026)
-  const targetDate = new Date('2026-06-20');
-  const today = new Date();
-  const diffTime = Math.max(0, targetDate.getTime() - today.getTime());
-  const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 300;
 
   const moduleCards = [
     {
@@ -161,15 +151,15 @@ export const StudentDashboard: React.FC = () => {
     {
       id: 'module-coach',
       phase: 'Koçluk',
-      title: 'Koçluk & İletişim',
+      title: 'Koçluk & Soru Mesajları',
       icon: Users,
       iconColor: 'text-[#AF52DE]',
       iconBg: 'bg-[#AF52DE]/10',
-      description: 'Koçunuzla birebir iletişim, soru sorma, randevu takvimi ve özel değerlendirme notları.',
-      featureTag: 'Birebir Koçluk • Özel Notlar',
+      description: 'Yalnızca koçluk kodunuzla eşleştiğiniz koçunuzla birebir canlı mesajlaşma ve soru iletimi.',
+      featureTag: 'Birebir İletişim • Soru Cevap',
       stats: 'Koçluk Aktif',
-      path: '/coach-notes',
-      actionText: 'Koç Notları',
+      path: '/coaching',
+      actionText: 'Koçuma Mesaj Yaz',
     },
   ];
 
@@ -178,10 +168,10 @@ export const StudentDashboard: React.FC = () => {
       {/* Bento Grid Top Section: Welcome Banner & Countdown Widget */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Welcome Bento Card (Span 3 cols) */}
-        <div className="lg:col-span-3 bento-card p-6 md:p-8 flex flex-col justify-between relative overflow-hidden bg-white">
+        <div className="lg:col-span-3 bento-card p-6 md:p-8 flex flex-col justify-between relative overflow-hidden bg-white border border-black/[0.06]">
           <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#0071E3]/10 text-[#0071E3]">
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#0071E3]/10 text-[#0071E3] border border-[#0071E3]/20">
                 YKS 2026 Hazırlık Masası
               </span>
               <span className="text-xs font-medium text-[#86868B]">
@@ -191,69 +181,121 @@ export const StudentDashboard: React.FC = () => {
             <h2 className="text-2xl md:text-3xl font-bold text-[#1D1D1F] tracking-tight">
               Hoş geldin, {user?.full_name || 'Öğrenci'}
             </h2>
-            <p className="text-sm text-[#86868B] mt-2 max-w-2xl leading-relaxed">
+            <p className="text-sm text-[#86868B] mt-1.5 max-w-2xl leading-relaxed">
               Çalışmalarınızı, kaynaklarınızı, hatalı sorularınızı ve deneme netlerinizi kaydedin. Gelişiminizi Apple sadeliğinde takip edin.
             </p>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-black/[0.06] flex flex-wrap items-center gap-4 text-xs font-medium text-[#86868B]">
-            <span className="flex items-center gap-1.5 text-[#1D1D1F] font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              {user?.full_name || 'Öğrenci'}
-            </span>
-            <span className="text-black/20">•</span>
-            <span>Hedef: YKS 2026</span>
-            <span className="text-black/20">•</span>
-            <span className="text-[#0071E3] font-medium">
-              {exams.length} Deneme • {wrongQuestions.length} Yanlış Soru • {books.length} Kaynak
-            </span>
+          {/* Middle: Live Quick Insight Cards (Fills fullscreen space with vital student metrics) */}
+          <div className="my-4 grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10">
+            {/* 1. Odak Süresi */}
+            <div className="p-3.5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] flex flex-col justify-between transition-all hover:bg-black/[0.03]">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-wider">Bugünkü Odak</span>
+                <Clock className="w-4 h-4 text-[#0071E3]" />
+              </div>
+              <div>
+                <div className="text-lg font-black text-[#1D1D1F] tracking-tight">{todayHoursStr}</div>
+                <div className="text-[11px] font-medium text-[#86868B] mt-0.5 truncate">
+                  {todayMinutes >= 180 ? '🎯 Hedef Tamamlandı' : todayMinutes > 0 ? '⏳ Aktif Çalışma' : 'Henüz başlanmadı'}
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Son Deneme */}
+            <div className="p-3.5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] flex flex-col justify-between transition-all hover:bg-black/[0.03]">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-wider">Son Deneme</span>
+                <TrendingUp className="w-4 h-4 text-[#34C759]" />
+              </div>
+              <div>
+                <div className="text-lg font-black text-[#1D1D1F] tracking-tight">
+                  {latestExamNet !== null ? `${latestExamNet} Net` : '0 Net'}
+                </div>
+                <div className="text-[11px] font-medium text-[#86868B] mt-0.5 truncate">
+                  {exams.length > 0 ? `${exams.length} Deneme Kayıtlı` : 'Deneme Girilmedi'}
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Yanlış Soru & Kaynak */}
+            <div className="p-3.5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] flex flex-col justify-between transition-all hover:bg-black/[0.03]">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-wider">Hata Havuzu</span>
+                <HelpCircle className="w-4 h-4 text-[#FF3B30]" />
+              </div>
+              <div>
+                <div className="text-lg font-black text-[#1D1D1F] tracking-tight">
+                  {wrongQuestions.length} Soru
+                </div>
+                <div className="text-[11px] font-medium text-[#86868B] mt-0.5 truncate">
+                  {books.length} Kaynak Kitapta
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Çalışma Serisi */}
+            <div className="p-3.5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] flex flex-col justify-between transition-all hover:bg-black/[0.03]">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-wider">İstikrar Serisi</span>
+                <Flame className="w-4 h-4 text-[#FF9500]" />
+              </div>
+              <div>
+                <div className="text-lg font-black text-[#1D1D1F] tracking-tight">
+                  {streak?.current_streak || 0} Gün
+                </div>
+                <div className="text-[11px] font-medium text-[#86868B] mt-0.5 truncate">
+                  {unlockedBadges.length} Rozet Açık
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-2 pt-3.5 border-t border-black/[0.06] flex flex-wrap items-center justify-between gap-3 text-xs font-medium text-[#86868B] relative z-10">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="flex items-center gap-1.5 text-[#1D1D1F] font-bold">
+                <span className="w-2 h-2 rounded-full bg-[#34C759] animate-pulse"></span>
+                {user?.full_name || 'Öğrenci'}
+              </span>
+              <span className="text-black/20">•</span>
+              <span className="font-semibold text-[#0071E3]">
+                Alan: {user?.field || 'SAY'}
+              </span>
+              <span className="text-black/20">•</span>
+              <span>Hedef: {user?.target_department || 'YKS 2026 Hedef Bölüm'}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#F5F5F7] border border-black/[0.06] text-[#1D1D1F]">
+                {user?.coach_name ? `Koç: ${user.coach_name}` : 'Bireysel Hazırlık'}
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Countdown Bento Widget (Span 1 col) */}
-        <div className="lg:col-span-1 bento-card p-6 flex flex-col justify-between bg-white">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">
-              YKS Sayacı
-            </span>
-            <div className="w-8 h-8 rounded-full bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center">
-              <Target className="w-4 h-4" />
-            </div>
-          </div>
-
-          <div className="my-3">
-            <p className="text-4xl font-bold text-[#1D1D1F] tracking-tight">
-              {daysLeft}
-            </p>
-            <p className="text-xs font-medium text-[#86868B] mt-0.5">
-              Geriye Kalan Gün
-            </p>
-          </div>
-
-          <div className="p-2.5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] flex items-center justify-between text-xs">
-            <span className="text-[#86868B]">Hedef Tarih:</span>
-            <span className="font-semibold text-[#1D1D1F]">20 Haziran 2026</span>
-          </div>
+        <div className="lg:col-span-1">
+          <YksCountdownWidget />
         </div>
       </div>
 
-      {/* Streak & Achievement Badges Banner - Apple Fitness Ring vibe */}
-      <div className="bg-[#1D1D1F] text-white p-5 md:p-6 rounded-[24px] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-black/[0.08]">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[#FF9500] text-white flex items-center justify-center shadow-md shrink-0">
-            <Flame className="w-6 h-6" />
+      {/* Streak & Achievement Badges Card (Light Apple Style) */}
+      <div className="bento-card p-4 sm:p-5 md:p-6 bg-white border border-black/[0.06] text-[#1D1D1F] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#FF9500]/10 text-[#FF9500] border border-[#FF9500]/20 flex items-center justify-center shrink-0">
+            <Flame className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base md:text-lg font-bold tracking-tight text-white">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm sm:text-base md:text-lg font-bold tracking-tight text-[#1D1D1F]">
                 {streak?.current_streak || 0} Günlük Çalışma Serisi
               </h3>
-              <span className="text-xs bg-white/15 px-2.5 py-0.5 rounded-full font-medium text-white/90">
+              <span className="text-[11px] sm:text-xs bg-[#FF9500]/10 text-[#FF9500] border border-[#FF9500]/20 px-2.5 py-0.5 rounded-full font-medium whitespace-nowrap">
                 {streak?.is_studied_today ? 'Bugün Tamamlandı' : 'Bugün Bekleniyor'}
               </span>
             </div>
-            <p className="text-xs text-[#86868B] mt-0.5">
-              En uzun seri: <strong className="text-white">{streak?.longest_streak || 0} gün</strong> • Kazanılan rozetler: <strong className="text-white">{unlockedBadges.length} adet</strong>
+            <p className="text-xs text-[#86868B] mt-0.5 truncate sm:whitespace-normal">
+              En uzun seri: <strong className="text-[#1D1D1F]">{streak?.longest_streak || 0} gün</strong> • Kazanılan rozetler: <strong className="text-[#0071E3]">{unlockedBadges.length} adet</strong>
             </p>
           </div>
         </div>
@@ -262,11 +304,11 @@ export const StudentDashboard: React.FC = () => {
           type="button"
           id="btn-view-profile-badges"
           onClick={() => navigate('/profile')}
-          className="py-2 px-4 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-all shrink-0 flex items-center justify-center gap-2 cursor-pointer border border-white/10 active:scale-95"
+          className="apple-btn-secondary py-2 px-3.5 sm:py-2.5 sm:px-4 text-xs font-semibold rounded-full shrink-0 flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto"
         >
-          <Trophy className="w-3.5 h-3.5 text-[#FF9500]" />
+          <Trophy className="w-3.5 h-3.5 text-[#FF9500] shrink-0" />
           <span>Rozetleri & Profili Gör</span>
-          <ArrowRight className="w-3.5 h-3.5 text-white/60" />
+          <ArrowRight className="w-3.5 h-3.5 text-[#86868B] shrink-0" />
         </button>
       </div>
 
@@ -275,7 +317,7 @@ export const StudentDashboard: React.FC = () => {
         <div
           id="card-cta-ai-predictor"
           onClick={() => navigate('/ai-analytics')}
-          className="p-5 rounded-[24px] bg-white border border-black/[0.06] shadow-sm hover:border-[#0071E3] transition-all cursor-pointer flex items-center justify-between group"
+          className="bento-card p-5 bg-white border border-black/[0.06] hover:border-[#0071E3] transition-all cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center">
@@ -297,7 +339,7 @@ export const StudentDashboard: React.FC = () => {
         <div
           id="card-cta-coaching-hub"
           onClick={() => navigate('/coaching')}
-          className="p-5 rounded-[24px] bg-white border border-black/[0.06] shadow-sm hover:border-[#34C759] transition-all cursor-pointer flex items-center justify-between group"
+          className="bento-card p-5 bg-white border border-black/[0.06] hover:border-[#34C759] transition-all cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-[#34C759]/10 text-[#34C759] flex items-center justify-center">
@@ -320,7 +362,7 @@ export const StudentDashboard: React.FC = () => {
       {/* Bento Metrics 4-Grid Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Günün Çalışması */}
-        <div className="bento-card p-5 bg-white flex flex-col justify-between">
+        <div className="bento-card p-5 bg-white border border-black/[0.06] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-[#86868B]">Günün Çalışması</p>
@@ -336,7 +378,7 @@ export const StudentDashboard: React.FC = () => {
         </div>
 
         {/* Metric 2: Yanlış Soru Havuzu */}
-        <div className="bento-card p-5 bg-white flex flex-col justify-between">
+        <div className="bento-card p-5 bg-white border border-black/[0.06] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-[#86868B]">Yanlış Soru Havuzu</p>
@@ -354,7 +396,7 @@ export const StudentDashboard: React.FC = () => {
         </div>
 
         {/* Metric 3: Son Deneme Neti */}
-        <div className="bento-card p-5 bg-white flex flex-col justify-between">
+        <div className="bento-card p-5 bg-white border border-black/[0.06] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-[#86868B]">Son Deneme Neti</p>
@@ -372,7 +414,7 @@ export const StudentDashboard: React.FC = () => {
         </div>
 
         {/* Metric 4: Aktif Kaynaklar */}
-        <div className="bento-card p-5 bg-white flex flex-col justify-between">
+        <div className="bento-card p-5 bg-white border border-black/[0.06] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-[#86868B]">Kayıtlı Kaynaklar</p>
@@ -388,9 +430,9 @@ export const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Bento Grid Middle Section: Analytics Chart & Future Modules */}
+      {/* Bento Grid Middle Section: Analytics Chart & Modules */}
       <div className="space-y-6">
-        {/* Bento Analytics Chart Component (Recharts Line Chart) */}
+        {/* Bento Analytics Chart Component */}
         <DashboardExamTrendChart
           exams={exams}
           onNavigateToExams={() => navigate('/exams')}
@@ -416,7 +458,7 @@ export const StudentDashboard: React.FC = () => {
                 <div
                   key={card.id}
                   id={card.id}
-                  className="bento-card p-6 flex flex-col justify-between group bg-white hover:border-black/[0.12] transition-all"
+                  className="bento-card p-6 flex flex-col justify-between group bg-white border border-black/[0.06] hover:border-black/[0.12] transition-all"
                 >
                   <div>
                     <div className="flex items-start justify-between">

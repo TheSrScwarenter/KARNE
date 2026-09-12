@@ -4,25 +4,34 @@ import {
   CoachingAppointment,
   CoachingTask,
   TaskStatus,
-  AppointmentStatus,
 } from '../types';
 
-const MESSAGES_STORAGE_KEY = 'karne_coaching_messages_v1';
-const APPOINTMENTS_STORAGE_KEY = 'karne_coaching_appointments_v1';
-const TASKS_STORAGE_KEY = 'karne_coaching_tasks_v1';
+const MESSAGES_STORAGE_KEY = 'karne_coaching_messages_v4';
+const APPOINTMENTS_STORAGE_KEY = 'karne_coaching_appointments_v4';
+const TASKS_STORAGE_KEY = 'karne_coaching_tasks_v4';
 
 class CoachingHubService {
   // ---------------------------------------------------------------------------
-  // 1. MESSAGING & QUESTION SOLVING
+  // 1. MESSAGING & QUESTION SOLVING (Strictly Real User Data Only)
   // ---------------------------------------------------------------------------
-  public async getMessages(studentId: string): Promise<CoachingMessage[]> {
+  public async getMessages(studentId: string, coachId?: string): Promise<CoachingMessage[]> {
     const list = cloudStorage.getItem<CoachingMessage[]>(MESSAGES_STORAGE_KEY, []);
     return list
-      .filter((m) => m.student_id === studentId)
+      .filter((m) => {
+        const matchesStudent =
+          m.student_id === studentId || m.sender_id === studentId || m.receiver_id === studentId;
+        if (!matchesStudent) return false;
+        if (coachId) {
+          return m.sender_id === coachId || m.receiver_id === coachId;
+        }
+        return true;
+      })
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }
 
-  public async sendMessage(message: Omit<CoachingMessage, 'id' | 'created_at' | 'is_read'>): Promise<CoachingMessage> {
+  public async sendMessage(
+    message: Omit<CoachingMessage, 'id' | 'created_at' | 'is_read'>
+  ): Promise<CoachingMessage> {
     const list = cloudStorage.getItem<CoachingMessage[]>(MESSAGES_STORAGE_KEY, []);
     const newMsg: CoachingMessage = {
       ...message,
@@ -49,16 +58,34 @@ class CoachingHubService {
   // ---------------------------------------------------------------------------
   // 2. APPOINTMENTS & CALENDAR
   // ---------------------------------------------------------------------------
-  public async getAppointments(studentId?: string, coachId?: string): Promise<CoachingAppointment[]> {
+  public async getAppointments(
+    studentId?: string,
+    coachId?: string
+  ): Promise<CoachingAppointment[]> {
     const list = cloudStorage.getItem<CoachingAppointment[]>(APPOINTMENTS_STORAGE_KEY, []);
-    return list.sort((a, b) => {
-      const dateA = new Date(`${a.appointment_date}T${a.start_time}`).getTime();
-      const dateB = new Date(`${b.appointment_date}T${b.start_time}`).getTime();
-      return dateA - dateB;
-    });
+    return list
+      .filter((a) => {
+        if (coachId) {
+          return a.coach_id === coachId || a.student_id === studentId;
+        }
+        if (studentId) {
+          return a.student_id === studentId;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const dateA = new Date(`${a.appointment_date}T${a.start_time}`).getTime();
+        const dateB = new Date(`${b.appointment_date}T${b.start_time}`).getTime();
+        return dateA - dateB;
+      });
   }
 
-  public async bookAppointment(appointmentId: string, studentId: string, studentName: string, note?: string): Promise<CoachingAppointment> {
+  public async bookAppointment(
+    appointmentId: string,
+    studentId: string,
+    studentName: string,
+    note?: string
+  ): Promise<CoachingAppointment> {
     const list = cloudStorage.getItem<CoachingAppointment[]>(APPOINTMENTS_STORAGE_KEY, []);
     const idx = list.findIndex((a) => a.id === appointmentId);
     if (idx === -1) throw new Error('Randevu bulunamadı.');
@@ -91,7 +118,9 @@ class CoachingHubService {
     }
   }
 
-  public async createAppointmentSlot(appointment: Omit<CoachingAppointment, 'id' | 'created_at' | 'updated_at'>): Promise<CoachingAppointment> {
+  public async createAppointmentSlot(
+    appointment: Omit<CoachingAppointment, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<CoachingAppointment> {
     const list = cloudStorage.getItem<CoachingAppointment[]>(APPOINTMENTS_STORAGE_KEY, []);
     const newApp: CoachingAppointment = {
       ...appointment,
@@ -114,7 +143,11 @@ class CoachingHubService {
       .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
   }
 
-  public async updateTaskStatus(taskId: string, status: TaskStatus, notes?: string): Promise<CoachingTask> {
+  public async updateTaskStatus(
+    taskId: string,
+    status: TaskStatus,
+    notes?: string
+  ): Promise<CoachingTask> {
     const list = cloudStorage.getItem<CoachingTask[]>(TASKS_STORAGE_KEY, []);
     const idx = list.findIndex((t) => t.id === taskId);
     if (idx === -1) throw new Error('Görev bulunamadı.');
@@ -123,14 +156,19 @@ class CoachingHubService {
       ...list[idx],
       status,
       completion_notes: notes !== undefined ? notes : list[idx].completion_notes,
-      completed_at: status === 'completed' || status === 'verified' ? new Date().toISOString() : list[idx].completed_at,
+      completed_at:
+        status === 'completed' || status === 'verified'
+          ? new Date().toISOString()
+          : list[idx].completed_at,
       updated_at: new Date().toISOString(),
     };
     cloudStorage.setItem(TASKS_STORAGE_KEY, list);
     return list[idx];
   }
 
-  public async createTask(task: Omit<CoachingTask, 'id' | 'created_at' | 'updated_at'>): Promise<CoachingTask> {
+  public async createTask(
+    task: Omit<CoachingTask, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<CoachingTask> {
     const list = cloudStorage.getItem<CoachingTask[]>(TASKS_STORAGE_KEY, []);
     const newTask: CoachingTask = {
       ...task,

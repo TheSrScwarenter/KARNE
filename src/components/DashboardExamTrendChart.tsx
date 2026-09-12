@@ -15,7 +15,6 @@ import {
   BarChart3,
   Plus,
   ArrowRight,
-  Sparkles,
   Award,
   Calendar,
 } from 'lucide-react';
@@ -181,7 +180,7 @@ export const DashboardExamTrendChart: React.FC<DashboardExamTrendChartProps> = (
   };
 
   return (
-    <div className="bento-card p-6 md:p-7 bg-white">
+    <div className="bento-card p-6 md:p-7 bg-white border border-black/[0.06]">
       {/* Top Header Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -264,7 +263,7 @@ export const DashboardExamTrendChart: React.FC<DashboardExamTrendChartProps> = (
           <button
             type="button"
             onClick={() => setSelectedFilter('ALL')}
-            className="mt-2 text-xs font-semibold text-[#0071E3] hover:underline"
+            className="mt-2 text-xs font-semibold text-[#0071E3] hover:underline cursor-pointer"
           >
             Tüm Denemeleri Göster
           </button>
@@ -340,7 +339,11 @@ export const DashboardExamTrendChart: React.FC<DashboardExamTrendChartProps> = (
                 data={chartData}
                 margin={{ top: 12, right: 16, left: -14, bottom: 4 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F2" vertical={false} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#F0F0F2"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="displayDate"
                   stroke="#86868B"

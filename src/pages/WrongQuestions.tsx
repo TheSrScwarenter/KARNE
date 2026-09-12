@@ -15,6 +15,8 @@ import {
   ChevronUp,
   Lightbulb,
   HelpCircle,
+  Database,
+  Cloud,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { WrongQuestion, ErrorType, WrongQuestionsAnalysisReport } from '../types';
@@ -230,12 +232,16 @@ export const WrongQuestions: React.FC = () => {
       {/* Top Banner & Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-[#DFD9CC] rounded-3xl p-6 shadow-xs">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#1B2A4A] text-white">
               HATA KASASI
             </span>
             <span className="font-caveat text-lg text-[#D97736] font-bold">
               • Soru Sınıflandırma & AI Teşhis
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <Database className="w-3 h-3 text-emerald-600" />
+              <span>{wrongQuestionsService.isSupabaseActive() ? 'Supabase Doğrudan Veritabanı Aktif' : 'Güvenli Depolama (IndexedDB)'}</span>
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-[#1B2A4A] tracking-tight mt-1">

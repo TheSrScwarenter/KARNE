@@ -8,6 +8,7 @@ import {
   AlertCircle,
   UserPlus,
 } from 'lucide-react';
+import { StudiiLogo } from '../components/StudiiLogo';
 
 export const Login: React.FC = () => {
   const { signIn, navigate } = useAuth();
@@ -35,32 +36,24 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-4 sm:p-6 font-sans">
-      <div className="w-full max-w-md">
-        {/* Logo & Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl overflow-hidden shadow-lg mb-4 border border-black/[0.08] bg-white">
-            <img
-              src="/logo.jpg"
-              alt="Karne Logo"
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-[#000000] flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative apple-mesh-gradient transition-colors duration-300">
+      <div className="w-full max-w-md apple-animate-in">
+        {/* Studii Typographic Logo & Hero */}
+        <div className="text-center mb-8 flex flex-col items-center">
+          <div className="mb-3">
+            <StudiiLogo size="xl" showBadge={false} />
           </div>
-          <h1 className="text-3xl font-bold text-[#1D1D1F] tracking-tight">
-            Karne
-          </h1>
-          <p className="text-sm text-[#86868B] mt-1 font-normal">
-            YKS 2026 Çalışma Takip ve Koçluk Masası
+          <p className="text-sm text-[#7E8D9F] mt-1 font-medium max-w-xs mx-auto">
+            Yeni Nesil YKS Hazırlık & Yönetim Masası
           </p>
         </div>
 
         {/* Login Bento Card */}
-        <div className="bento-card p-7 sm:p-9 bg-white shadow-sm border border-black/[0.06] rounded-[24px]">
-          <div className="flex items-center justify-between border-b border-black/[0.06] pb-4 mb-6">
+        <div className="bento-card p-6 sm:p-8 bg-white dark:bg-[#161617] border border-black/[0.06] dark:border-white/[0.08] rounded-[24px]">
+          <div className="flex items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] pb-4 mb-6">
             <div>
-              <h2 className="text-lg font-semibold text-[#1D1D1F]">Giriş Yap</h2>
-              <p className="text-xs text-[#86868B] mt-0.5">
+              <h2 className="text-lg font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight">Giriş Yap</h2>
+              <p className="text-xs text-[#86868B] dark:text-[#A1A1A6] mt-0.5">
                 Hesabınızla hemen oturum açın.
               </p>
             </div>
@@ -68,7 +61,7 @@ export const Login: React.FC = () => {
               type="button"
               id="btn-login-to-signup"
               onClick={() => navigate('/signup')}
-              className="text-xs font-semibold text-[#0071E3] hover:underline flex items-center gap-1"
+              className="text-xs font-semibold text-[#0071E3] hover:underline flex items-center gap-1 cursor-pointer"
             >
               <UserPlus className="w-3.5 h-3.5" />
               <span>Kayıt Ol</span>
@@ -85,11 +78,11 @@ export const Login: React.FC = () => {
           {/* E-Posta / Şifre Formu */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">
+              <label className="block text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] mb-1.5">
                 E-Posta Adresi
               </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-[#86868B] absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <div className="relative flex items-center">
+                <Mail className="w-4 h-4 text-[#86868B] dark:text-[#A1A1A6] absolute left-3.5 pointer-events-none shrink-0 z-10" />
                 <input
                   type="email"
                   id="login-email"
@@ -97,19 +90,19 @@ export const Login: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="ornek@karne.app"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20 transition-all placeholder:text-[#86868B]"
+                  className="apple-input apple-input-with-icon w-full"
                 />
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-[#1D1D1F]">
+                <label className="block text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
                   Şifre
                 </label>
               </div>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-[#86868B] absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <div className="relative flex items-center">
+                <Lock className="w-4 h-4 text-[#86868B] dark:text-[#A1A1A6] absolute left-3.5 pointer-events-none shrink-0 z-10" />
                 <input
                   type="password"
                   id="login-password"
@@ -117,7 +110,7 @@ export const Login: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-[#F5F5F7] border border-black/[0.08] rounded-xl text-xs text-[#1D1D1F] focus:outline-none focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20 transition-all placeholder:text-[#86868B]"
+                  className="apple-input apple-input-with-icon w-full"
                 />
               </div>
             </div>
@@ -126,7 +119,7 @@ export const Login: React.FC = () => {
               type="submit"
               id="btn-login-submit"
               disabled={loading}
-              className="apple-btn-primary w-full py-3 px-4 text-xs font-medium rounded-full flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 mt-4 cursor-pointer"
+              className="apple-btn-primary w-full py-3.5 px-4 text-xs font-semibold rounded-full flex items-center justify-center gap-2 mt-4 cursor-pointer disabled:opacity-50"
             >
               {loading ? (
                 <span>Doğrulanıyor...</span>
@@ -140,14 +133,14 @@ export const Login: React.FC = () => {
           </form>
 
           {/* Signup Link CTA */}
-          <div className="mt-6 text-center pt-5 border-t border-black/[0.06]">
-            <p className="text-xs text-[#86868B]">
+          <div className="mt-6 text-center pt-5 border-t border-black/[0.06] dark:border-white/[0.08]">
+            <p className="text-xs text-[#86868B] dark:text-[#A1A1A6]">
               Hesabınız yok mu?{' '}
               <button
                 type="button"
                 id="btn-go-to-signup"
                 onClick={() => navigate('/signup')}
-                className="font-semibold text-[#0071E3] hover:underline transition-colors"
+                className="font-semibold text-[#0071E3] hover:underline transition-colors cursor-pointer"
               >
                 Yeni Hesap Oluştur
               </button>

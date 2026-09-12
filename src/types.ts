@@ -18,7 +18,9 @@ export interface UserProfile {
   target_department?: string | null;
   target_rank?: string | null;
   coaching_specialty?: string | null;
+  coach_code?: string | null;
   assigned_coach_id?: string | null;
+  assigned_coach_name?: string | null;
   approval_date?: string | null;
   notes_by_admin?: string | null;
   weekly_target_minutes?: number | null;
@@ -341,6 +343,7 @@ export interface CoachingTask {
   subject: string;
   target_question_count?: number | null;
   target_book_title?: string | null;
+  target_book?: string | null;
   due_date: string; // YYYY-MM-DD
   priority: TaskPriority;
   status: TaskStatus;
@@ -381,3 +384,154 @@ export interface WeakTopicDiagnosis {
   recommended_action: string;
   estimated_net_gain: number;
 }
+
+// =============================================================================
+// TYT & AYT Konu/Kazanım Bazlı Isı Haritası (Topic Mastery Matrix)
+// =============================================================================
+
+export type MasteryLevel = 'critical' | 'learning' | 'competent' | 'mastered';
+
+export interface TopicMasteryItem {
+  id: string;
+  subject: string;
+  exam_type: 'TYT' | 'AYT';
+  topic_name: string;
+  importance_tier: 'high' | 'medium' | 'standard'; // ÖSYM soru çıkma sıklığı
+  mastery_percentage: number; // 0 - 100
+  mastery_level: MasteryLevel;
+  total_questions_solved: number;
+  wrong_questions_count: number;
+  book_status: 'not_started' | 'in_progress' | 'completed';
+  last_practiced_at?: string | null;
+  ai_tip?: string;
+}
+
+export interface SubjectMasterySummary {
+  subject: string;
+  exam_type: 'TYT' | 'AYT';
+  topics_count: number;
+  completed_topics_count: number;
+  average_mastery_percentage: number;
+  total_wrong_count: number;
+  critical_topics_count: number;
+}
+
+// =============================================================================
+// Akıllı Deneme Hedefleyici & Sıralama Simülatörü
+// =============================================================================
+
+export interface SimulatedNetValues {
+  field: 'SAY' | 'EA' | 'SOZ' | 'DIL';
+  obp_score: number; // 50 - 100
+  // TYT (120 Soru)
+  tyt_turkish: number; // Max 40
+  tyt_social: number; // Max 20
+  tyt_math: number; // Max 40
+  tyt_science: number; // Max 20
+  // AYT SAY (80 Soru)
+  ayt_math: number; // Max 40
+  ayt_physics: number; // Max 14
+  ayt_chemistry: number; // Max 13
+  ayt_biology: number; // Max 13
+  // AYT EA / SÖZ
+  ayt_literature: number; // Max 24
+  ayt_history1: number; // Max 10
+  ayt_geography1: number; // Max 6
+  ayt_history2?: number; // Max 11
+  ayt_geography2?: number; // Max 11
+  ayt_philosophy?: number; // Max 12
+  ayt_religion?: number; // Max 6
+  // AYT DİL
+  ydt_language?: number; // Max 80
+}
+
+export interface TargetUniversityBenchmark {
+  id: string;
+  university_name: string;
+  department_name: string;
+  city: string;
+  field: 'SAY' | 'EA' | 'SOZ' | 'DIL';
+  target_rank_2025: number;
+  target_placement_score: number;
+  base_nets: {
+    tyt_total: number;
+    ayt_total: number;
+    tyt_breakdown: { turkish: number; social: number; math: number; science: number };
+    ayt_breakdown: Record<string, number>;
+  };
+  faculty_badge: string;
+}
+
+export interface SimulatedRankResult {
+  tyt_total_net: number;
+  ayt_total_net: number;
+  raw_score: number;
+  placement_score: number;
+  best_rank: number;
+  likely_rank: number;
+  worst_rank: number;
+  field: 'SAY' | 'EA' | 'SOZ' | 'DIL';
+  net_prescriptions: {
+    subject: string;
+    current_net: number;
+    target_net: number;
+    net_gap: number;
+    estimated_points_gain: number;
+    priority: 'high' | 'medium' | 'bonus';
+  }[];
+}
+
+// =============================================================================
+// Haftalık Lig & Motivasyon Rozetleri (Gamification)
+// =============================================================================
+
+export type LeagueTier = 'champions' | 'diamond' | 'platinum' | 'gold' | 'silver' | 'bronze';
+
+export interface LeagueLeaderboardUser {
+  id: string;
+  rank_position: number;
+  name: string;
+  avatar_initials: string;
+  avatar_color: string;
+  field: 'SAY' | 'EA' | 'SOZ' | 'DIL';
+  target_department?: string;
+  weekly_study_minutes: number;
+  weekly_study_hours: number;
+  weekly_xp: number;
+  streak_days: number;
+  is_current_user: boolean;
+  is_bot?: boolean;
+  movement: 'up' | 'down' | 'same';
+  movement_count?: number;
+  status_zone: 'promotion' | 'safe' | 'relegation';
+}
+
+export interface LeagueBotConfig {
+  id: string;
+  name: string;
+  field: 'SAY' | 'EA' | 'SOZ' | 'DIL';
+  target_department: string;
+  league_tier: LeagueTier;
+  behavior_mode: 'daily_xp' | 'target_rank';
+  daily_xp_rate: number; // e.g. 180 XP/day
+  target_rank_position?: number; // e.g. 2nd place
+  streak_days: number;
+  is_active: boolean;
+  avatar_color: string;
+  created_at: string;
+}
+
+export interface WeeklyLeagueInfo {
+  league_tier: LeagueTier;
+  league_name: string;
+  league_icon: string;
+  week_number: number;
+  days_left_in_week: number;
+  total_participants: number;
+  user_current_rank: number;
+  user_weekly_xp: number;
+  promotion_rank_cutoff: number;
+  relegation_rank_cutoff: number;
+  users: LeagueLeaderboardUser[];
+}
+

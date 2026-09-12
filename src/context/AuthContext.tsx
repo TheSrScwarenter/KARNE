@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { usersService, UserAccount } from '../lib/usersService';
+import { idbStorage } from '../lib/indexedDbStorage';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase/client';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -25,6 +27,7 @@ interface AuthContextType {
     target_university?: string;
     target_department?: string;
     coaching_specialty?: string;
+    coach_code?: string;
     autoActivate?: boolean;
   }) => Promise<{ error: string | null; requiresApproval?: boolean; user?: UserProfile }>;
   signOut: () => Promise<void>;
@@ -113,17 +116,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsMobileMenuOpen((prev) => !prev);
   };
 
-  // Sync user status on mount
+  // Sync user status on mount with resilient dual persistence
   useEffect(() => {
     async function initAuth() {
+      let activeProfile: UserProfile | null = null;
+
+      // 1. Try localStorage
       const saved = localStorage.getItem(ACTIVE_USER_STORAGE_KEY);
       if (saved) {
         try {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.id) {
-            const freshUser = await usersService.getUserById(parsed.id);
-            if (freshUser && freshUser.status === 'active') {
-              const profile: UserProfile = {
+          activeProfile = JSON.parse(saved);
+        } catch {}
+      }
+
+      // 2. Fallback to IndexedDB if localStorage was wiped or had quota issues
+      if (!activeProfile) {
+        try {
+          const idbProfile = await idbStorage.getItem<UserProfile>(ACTIVE_USER_STORAGE_KEY);
+          if (idbProfile && idbProfile.id) {
+            activeProfile = idbProfile;
+            try {
+              localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(idbProfile));
+            } catch {}
+          }
+        } catch {}
+      }
+
+      if (activeProfile && activeProfile.id) {
+        // Render immediately so user sees their dashboard without flicker
+        setUser(activeProfile);
+
+        // Verify status in background with fresh database
+        try {
+          const freshUser = await usersService.getUserById(activeProfile.id);
+          if (freshUser) {
+            if (freshUser.status === 'active') {
+              const updatedProfile: UserProfile = {
                 id: freshUser.id,
                 role: freshUser.role,
                 status: freshUser.status,
@@ -135,20 +163,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 target_department: freshUser.target_department,
                 target_rank: freshUser.target_rank,
                 coaching_specialty: freshUser.coaching_specialty,
+                coach_code: freshUser.coach_code,
                 assigned_coach_id: freshUser.assigned_coach_id,
+                assigned_coach_name: freshUser.assigned_coach_name,
                 created_at: freshUser.created_at,
               };
-              setUser(profile);
-              localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(profile));
-            } else {
-              // User is no longer active or deleted
+              setUser(updatedProfile);
+              try {
+                localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(updatedProfile));
+                await idbStorage.setItem(ACTIVE_USER_STORAGE_KEY, updatedProfile);
+              } catch {}
+            } else if (freshUser.status === 'suspended' || freshUser.status === 'rejected') {
+              // Explicitly deactivated by admin
               setUser(null);
               localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+              await idbStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
             }
           }
-        } catch {
-          setUser(null);
-          localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+        } catch (err) {
+          console.warn('Background user verification error, keeping active session:', err);
         }
       }
       setLoading(false);
@@ -215,12 +248,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       target_department: foundUser.target_department,
       target_rank: foundUser.target_rank,
       coaching_specialty: foundUser.coaching_specialty,
+      coach_code: foundUser.coach_code,
       assigned_coach_id: foundUser.assigned_coach_id,
+      assigned_coach_name: foundUser.assigned_coach_name,
       created_at: foundUser.created_at,
     };
 
     setUser(profile);
-    localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(profile));
+    try {
+      localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(profile));
+    } catch {}
+    try {
+      await idbStorage.setItem(ACTIVE_USER_STORAGE_KEY, profile);
+    } catch {}
+
+    // Synchronize Supabase Auth session in background
+    if (isSupabaseConfigured() && foundUser.password) {
+      supabase.auth
+        .signInWithPassword({
+          email: foundUser.email,
+          password: foundUser.password,
+        })
+        .catch(() => {});
+    }
 
     if (profile.role === 'admin') {
       navigate('/admin');
@@ -241,11 +291,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     target_university?: string;
     target_department?: string;
     coaching_specialty?: string;
+    coach_code?: string;
     autoActivate?: boolean;
   }): Promise<{ error: string | null; requiresApproval?: boolean; user?: UserProfile }> => {
     try {
       const newUser = await usersService.registerUser(data);
-      const isAutoActive = data.autoActivate !== false;
+      const isAutoActive = data.autoActivate === true;
+
+      // Optional background Supabase Auth sign-up
+      if (isSupabaseConfigured() && data.password) {
+        supabase.auth
+          .signUp({
+            email: data.email.trim().toLowerCase(),
+            password: data.password,
+            options: {
+              data: {
+                full_name: data.full_name,
+                role: data.role,
+              },
+            },
+          })
+          .catch(() => {});
+      }
 
       if (isAutoActive) {
         // Log in immediately
@@ -261,11 +328,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           target_department: newUser.target_department,
           target_rank: newUser.target_rank,
           coaching_specialty: newUser.coaching_specialty,
+          coach_code: newUser.coach_code,
           assigned_coach_id: newUser.assigned_coach_id,
+          assigned_coach_name: newUser.assigned_coach_name,
           created_at: newUser.created_at,
         };
         setUser(profile);
-        localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(profile));
+        try {
+          localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(profile));
+        } catch {}
+        try {
+          await idbStorage.setItem(ACTIVE_USER_STORAGE_KEY, profile);
+        } catch {}
         
         if (profile.role === 'admin') {
           navigate('/admin');
@@ -283,8 +357,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    if (isSupabaseConfigured()) {
+      supabase.auth.signOut().catch(() => {});
+    }
     setUser(null);
-    localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+    try {
+      localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+    } catch {}
+    try {
+      await idbStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+    } catch {}
     navigate('/login');
   };
 
@@ -304,7 +386,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         target_department: fresh.target_department,
         target_rank: fresh.target_rank,
         coaching_specialty: fresh.coaching_specialty,
+        coach_code: fresh.coach_code,
         assigned_coach_id: fresh.assigned_coach_id,
+        assigned_coach_name: fresh.assigned_coach_name,
         created_at: fresh.created_at,
       };
       setUser(profile);

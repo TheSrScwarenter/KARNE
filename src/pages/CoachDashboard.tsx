@@ -4,7 +4,7 @@ import { coachService, CoachStudent } from '../lib/coachService';
 import {
   Users,
   BrainCircuit,
-  FileText,
+  MessageSquare,
   Copy,
   Check,
   Plus,
@@ -22,12 +22,17 @@ import {
 export const CoachDashboard: React.FC = () => {
   const { user, navigate } = useAuth();
   const [students, setStudents] = useState<CoachStudent[]>([]);
-  const [inviteCode, setInviteCode] = useState<string>('YKS-KOC-8429');
+  const [inviteCode, setInviteCode] = useState<string>(
+    user?.coach_code || 'SELIN-KOC'
+  );
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    coachService.getStudents().then(setStudents);
-  }, []);
+    if (user?.coach_code) {
+      setInviteCode(user.coach_code);
+    }
+    coachService.getStudents(user?.id, user?.coach_code).then(setStudents);
+  }, [user]);
 
   const copyInviteCode = () => {
     navigator.clipboard.writeText(inviteCode);
@@ -42,6 +47,14 @@ export const CoachDashboard: React.FC = () => {
 
   const approvedCount = students.filter((s) => s.status === 'approved').length;
   const pendingCount = students.filter((s) => s.status === 'pending').length;
+
+  const totalGoals = students.reduce((acc, s) => acc + (s.customGoals?.length || 0), 0);
+  const completedGoals = students.reduce(
+    (acc, s) => acc + (s.customGoals?.filter((g) => g.completed).length || 0),
+    0
+  );
+  const goalSuccessRate = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
+  const totalWeeklyHours = students.reduce((acc, s) => acc + (s.weeklyStudyCompletedHours || 0), 0);
 
   const coachModules = [
     {
@@ -71,17 +84,17 @@ export const CoachDashboard: React.FC = () => {
       actionText: 'Öğrenci Seç & Program Yap',
     },
     {
-      id: 'coach-mod-notes',
+      id: 'coach-mod-messaging',
       phase: 'FAZ 6',
-      title: 'Koçluk Notları ve Rehberlik',
-      icon: FileText,
+      title: 'Öğrenci Soru & Canlı Mesajlaşma',
+      icon: MessageSquare,
       iconColor: 'text-[#34C759]',
       iconBg: 'bg-[#34C759]/10',
-      description: 'Her öğrenciye özel haftalık geri bildirim, motivasyon notu, ders dağılımı ve turlama taktikleri paylaşımı.',
-      featureTag: 'Birebir Geri Bildirim • Strateji Akışı',
-      stats: 'Tüm Notları İncele',
-      path: '/coach-notes',
-      actionText: 'Not Yaz & Oku',
+      description: 'Yalnızca davet kodunuzla kayıt olmuş öğrencilerinizle birebir soru çözümü, rehberlik ve anlık canlı mesajlaşma.',
+      featureTag: 'Birebir İletişim • Soru Cevap • Canlı Sohbet',
+      stats: 'Mesajları Aç',
+      path: '/coaching',
+      actionText: 'Mesajlaşmaya Git',
     },
   ];
 
@@ -180,27 +193,31 @@ export const CoachDashboard: React.FC = () => {
 
         <div className="bento-card p-5 bg-white">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-[#86868B]">İncelenen Denemeler</p>
+            <p className="text-xs font-medium text-[#86868B]">İncelenen Öğrenciler</p>
             <span className="w-7 h-7 rounded-lg bg-[#34C759]/10 text-[#34C759] flex items-center justify-center">
               <TrendingUp className="w-3.5 h-3.5" />
             </span>
           </div>
-          <p className="text-2xl font-bold text-[#0071E3] mt-2">12 Deneme</p>
+          <p className="text-2xl font-bold text-[#0071E3] mt-2">
+            {approvedCount > 0 ? `${approvedCount} Aktif` : '0 Aktif'}
+          </p>
           <p className="text-[11px] text-[#86868B] font-medium mt-1.5">
-            Son 14 günde 6 analiz
+            {pendingCount > 0 ? `${pendingCount} Onay Bekliyor` : 'Bekleyen istek yok'}
           </p>
         </div>
 
         <div className="bento-card p-5 bg-white">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-[#86868B]">Haftalık Programlar</p>
+            <p className="text-xs font-medium text-[#86868B]">Haftalık Çalışma</p>
             <span className="w-7 h-7 rounded-lg bg-[#FF9500]/10 text-[#FF9500] flex items-center justify-center">
-              <Calendar className="w-3.5 h-3.5" />
+              <Clock className="w-3.5 h-3.5" />
             </span>
           </div>
-          <p className="text-2xl font-bold text-[#FF9500] mt-2">Aktif Plan</p>
+          <p className="text-2xl font-bold text-[#FF9500] mt-2">
+            {totalWeeklyHours} Saat
+          </p>
           <p className="text-[11px] text-[#86868B] font-medium mt-1.5">
-            Öğrenci danışmanı hazır
+            Öğrencilerin toplam logu
           </p>
         </div>
 
@@ -211,9 +228,11 @@ export const CoachDashboard: React.FC = () => {
               <Target className="w-3.5 h-3.5" />
             </span>
           </div>
-          <p className="text-2xl font-bold text-[#34C759] mt-2">%82 Başarı</p>
+          <p className="text-2xl font-bold text-[#34C759] mt-2">
+            {totalGoals > 0 ? `%${goalSuccessRate}` : '%0'}
+          </p>
           <p className="text-[11px] text-[#34C759] font-medium mt-1.5">
-            Gelişim ivmesi yüksek
+            {totalGoals > 0 ? `${completedGoals}/${totalGoals} Tamamlandı` : 'Henüz hedef atanmadı'}
           </p>
         </div>
       </div>
@@ -252,54 +271,81 @@ export const CoachDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-black/[0.04] font-normal text-[#1D1D1F]">
-              {students.map((st) => {
-                const completedGoals = st.customGoals.filter((g) => g.completed).length;
-                const totalGoals = st.customGoals.length;
-                return (
-                  <tr key={st.id} className="hover:bg-[#F5F5F7]/80 transition-colors">
-                    <td className="py-3.5 pl-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-full ${st.avatarColor} text-white font-semibold flex items-center justify-center text-xs shadow-xs`}>
-                          {st.name.charAt(0)}
-                        </div>
-                        <div>
-                          <span className="font-semibold block text-[#1D1D1F]">{st.name}</span>
-                          <span className="text-[10px] text-[#86868B]">{st.field}</span>
-                        </div>
+              {students.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center">
+                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto text-center space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center">
+                        <Users className="w-6 h-6" />
                       </div>
-                    </td>
-                    <td className="py-3.5 text-[#86868B]">{st.targetDepartment} ({st.targetRank})</td>
-                    <td className="py-3.5 font-bold text-[#34C759]">{st.currentNetTYT} Net</td>
-                    <td className="py-3.5 text-[#86868B]">
-                      {st.weeklyStudyCompletedHours}s / {st.weeklyStudyGoalHours}s
-                    </td>
-                    <td className="py-3.5">
-                      <span className="inline-flex items-center gap-1 font-semibold text-[#0071E3] bg-[#0071E3]/10 px-2.5 py-0.5 rounded-full text-[11px]">
-                        {completedGoals}/{totalGoals} Hedef
-                      </span>
-                    </td>
-                    <td className="py-3.5">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium ${
-                          st.status === 'approved'
-                            ? 'bg-[#34C759]/10 text-[#34C759] border border-[#34C759]/20'
-                            : 'bg-[#FF9500]/10 text-[#FF9500] border border-[#FF9500]/20'
-                        }`}
-                      >
-                        {st.status === 'approved' ? 'Onaylı' : 'Beklemede'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 pr-3 text-right">
+                      <div>
+                        <p className="text-sm font-semibold text-[#1D1D1F]">Henüz Bağlı Öğrenci Yok</p>
+                        <p className="text-xs text-[#86868B] mt-1 leading-relaxed">
+                          Öğrencileriniz kayıt olurken veya öğrenci panellerinden davet kodunuzu (<span className="font-mono font-bold text-[#0071E3]">{inviteCode}</span>) girerek sizinle otomatik eşleşebilir.
+                        </p>
+                      </div>
                       <button
-                        onClick={() => navigate('/students')}
-                        className="apple-btn-secondary px-3 py-1 text-xs rounded-full cursor-pointer font-medium"
+                        onClick={copyInviteCode}
+                        className="apple-btn-primary px-4 py-2 text-xs font-semibold rounded-full inline-flex items-center gap-2 cursor-pointer"
                       >
-                        İncele
+                        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copied ? 'Davet Kodu Kopyalandı' : 'Davet Kodunu Kopyala'}</span>
                       </button>
-                    </td>
-                  </tr>
-                );
-              })}
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                students.map((st) => {
+                  const studentCompletedGoals = st.customGoals.filter((g) => g.completed).length;
+                  const studentTotalGoals = st.customGoals.length;
+                  return (
+                    <tr key={st.id} className="hover:bg-[#F5F5F7]/80 transition-colors">
+                      <td className="py-3.5 pl-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-full ${st.avatarColor} text-white font-semibold flex items-center justify-center text-xs shadow-xs`}>
+                            {st.name ? st.name.charAt(0).toUpperCase() : 'Ö'}
+                          </div>
+                          <div>
+                            <span className="font-semibold block text-[#1D1D1F]">{st.name}</span>
+                            <span className="text-[10px] text-[#86868B]">{st.field}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 text-[#86868B]">{st.targetDepartment} ({st.targetRank})</td>
+                      <td className="py-3.5 font-bold text-[#34C759]">{st.currentNetTYT} Net</td>
+                      <td className="py-3.5 text-[#86868B]">
+                        {st.weeklyStudyCompletedHours}s / {st.weeklyStudyGoalHours}s
+                      </td>
+                      <td className="py-3.5">
+                        <span className="inline-flex items-center gap-1 font-semibold text-[#0071E3] bg-[#0071E3]/10 px-2.5 py-0.5 rounded-full text-[11px]">
+                          {studentCompletedGoals}/{studentTotalGoals} Hedef
+                        </span>
+                      </td>
+                      <td className="py-3.5">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium ${
+                            st.status === 'approved'
+                              ? 'bg-[#34C759]/10 text-[#34C759] border border-[#34C759]/20'
+                              : 'bg-[#FF9500]/10 text-[#FF9500] border border-[#FF9500]/20'
+                          }`}
+                        >
+                          {st.status === 'approved' ? 'Onaylı' : 'Beklemede'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 pr-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => navigate('/students')}
+                            className="apple-btn-secondary px-3 py-1 text-xs rounded-full cursor-pointer font-medium"
+                          >
+                            İncele
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
